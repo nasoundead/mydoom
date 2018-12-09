@@ -126,6 +126,15 @@ size.")
                 all-the-icons-wicon all-the-icons-alltheicon))
     (advice-add fn :around #'doom*disable-all-the-icons-in-tty)))
 
+;; symbol-overlays
+(def-package! symbol-overlay
+  :bind (("M-i" . symbol-overlay-put)
+         ([C-f3] . symbol-overlay-put)
+         ([f3] . symbol-overlay-jump-next)
+         ([S-f3] . symbol-overlay-jump-prev)
+         ([M-f3] . symbol-overlay-remove-all))
+  :hook ((prog-mode) . symbol-overlay-mode))
+
 ;; `hide-mode-line-mode'
 (add-hook 'completion-list-mode-hook #'hide-mode-line-mode)
 (add-hook 'Man-mode-hook #'hide-mode-line-mode)

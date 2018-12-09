@@ -9,6 +9,7 @@
 
 ;; core-ui.el
 (package! all-the-icons)
+(package! symbol-overlay)
 (package! hide-mode-line)
 (package! highlight-indentation)
 (package! highlight-numbers)

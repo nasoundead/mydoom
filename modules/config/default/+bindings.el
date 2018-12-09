@@ -26,6 +26,12 @@
       ;; A little sandbox to run code in
       :gnvime "M-;" #'eval-expression
 
+      ;; symbol-overlay
+      :gnvime [C-f3] #'symbol-overlay-put
+      :gnvime [f3]   #'symbol-overlay-jump-next
+      :gnvime [S-f3] #'symbol-overlay-jump-prev
+      :gnvime [M-f3] #'symbol-overlay-remove-all
+
       ;; Text-scaling
       :n "M-+"   (λ! (text-scale-set 0))
       :n "M-="   #'text-scale-increase
