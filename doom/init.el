@@ -64,9 +64,10 @@
 
 
        :lang
-      (cc +irony +rtags); C/C++/Obj-C madness
+       (cc +irony +rtags); C/C++/Obj-C madness
        emacs-lisp        ; drown in parentheses
        go                ; the hipster dialect
+       rust              ; rust
        javascript        ; all(hope(abandon(ye(who(enter(here))))))
        markdown          ; writing docs for people to ignore
        (org              ; organize your plain life in plain text
