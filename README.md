@@ -3,7 +3,7 @@ https://github.com/hlissner/doom-emacs
 
 ## Quick start
 ```bash
-git clone https://github.com/nasoundead/doom-emacs-fan ~/.emacs.d
+git clone https://github.com/nasoundead/mydoom ~/.emacs.d
 cd ~/.emacs.d
 make quickstart
 ```

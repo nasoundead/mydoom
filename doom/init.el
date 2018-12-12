@@ -33,7 +33,7 @@
        (popup            ; tame sudden yet inevitable temporary windows
         +all             ; catch all popups that start with an asterix
         +defaults)       ; default popup rules
-       (pretty-code +fira)
+       ;(pretty-code +fira)
        unicode           ; extended unicode support for various languages
        vc-gutter         ; vcs diff in the fringe
        vi-tilde-fringe   ; fringe tildes to mark beyond EOB
@@ -77,7 +77,7 @@
         +export          ; Exporting org to whatever you want
         +present)        ; Emacs for presentations
        plantuml          ; diagrams for confusing people more
-       python            ; beautiful is better than ugly
+      (python +pyvenv)   ; beautiful is better than ugly
        rest              ; Emacs as a REST client
        web               ; the tubes
 
