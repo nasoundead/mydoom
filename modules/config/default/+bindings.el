@@ -32,6 +32,12 @@
       :gnvime [S-f3] #'symbol-overlay-jump-prev
       :gnvime [M-f3] #'symbol-overlay-remove-all
 
+      ;; windmove
+      :gnvime "C-S-j" #'evil-window-down
+      :gnvime "C-S-k" #'evil-window-up
+      :gnvime "C-S-h" #'evil-window-left
+      :gnvime "C-S-l" #'evil-window-right
+
       ;; Text-scaling
       :n "M-+"   (λ! (text-scale-set 0))
       :n "M-="   #'text-scale-increase
