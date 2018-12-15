@@ -61,14 +61,15 @@
        magit             ; a git porcelain for Emacs
        pdf               ; pdf enhancements
        rgb               ; creating color strings
+	   lsp               ; lsp
 
 
        :lang
        (cc +irony +rtags); C/C++/Obj-C madness
        emacs-lisp        ; drown in parentheses
-       go                ; the hipster dialect
+       (go +lsp)         ; the hipster dialect
        rust              ; rust
-       javascript        ; all(hope(abandon(ye(who(enter(here))))))
+       (javascript +lsp) ; all(hope(abandon(ye(who(enter(here))))))
        markdown          ; writing docs for people to ignore
        (org              ; organize your plain life in plain text
         +attach          ; custom attachment system
@@ -77,9 +78,9 @@
         +export          ; Exporting org to whatever you want
         +present)        ; Emacs for presentations
        plantuml          ; diagrams for confusing people more
-      (python +pyvenv)   ; beautiful is better than ugly
+      (python +pyvenv +lsp)   ; beautiful is better than ugly
        rest              ; Emacs as a REST client
-       web               ; the tubes
+       (web +lsp)        ; the tubes
 
        ;; Applications are complex and opinionated modules that transform Emacs
        ;; toward a specific purpose. They may have additional dependencies and

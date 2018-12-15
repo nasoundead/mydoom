@@ -9,6 +9,17 @@
 ;;
 (map! [remap evil-jump-to-tag] #'projectile-find-tag
       [remap find-tag]         #'projectile-find-tag
+	  
+	  :gnvime "M-."  #'xref-find-definitions
+      :gnvime "M-?"  #'xref-find-references
+	  ;; lsp
+	  (:when (featurep! :tools lsp)
+	    (:after lsp-ui
+		  (:map lsp-ui-peek-mode-map
+            "C-j"    #'lsp-ui-peek--select-next
+            "C-k"    #'lsp-ui-peek--select-prev
+			"j"    #'lsp-ui-peek--select-next
+            "k"    #'lsp-ui-peek--select-prev)))	
 
       ;; Ensure there are no conflicts
       :nmvo doom-leader-key nil

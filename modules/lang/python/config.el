@@ -131,6 +131,18 @@ called.")
         :nv "m" #'python-pytest-repeat
         :nv "p" #'python-pytest-popup))
 
+;;
+;; lsp
+(when (featurep! +lsp)
+  (after! python
+    ;; (lsp-define-stdio-client lsp-python "python"
+    ;;                          #'projectile-project-root
+    ;;                          '("pyls"))
+    (lsp-register-client
+      (make-lsp-client :new-connection (lsp-stdio-connection "pyls")
+                       :major-modes '(python-mode)
+                       :server-id 'pyls))
+    (add-hook! python-mode #'lsp)))
 
 ;;
 ;; Environment management
