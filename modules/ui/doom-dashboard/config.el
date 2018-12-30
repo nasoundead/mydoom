@@ -138,39 +138,38 @@ PLIST can have the following properties:
   [remap backward-button] #'+doom-dashboard/backward-button
   "n"       #'forward-button
   "p"       #'backward-button
-  "\C-n"    #'forward-button
-  "\C-p"    #'backward-button
+  "C-n"     #'forward-button
+  "C-p"     #'backward-button
   [down]    #'forward-button
   [up]      #'backward-button
   [tab]     #'forward-button
   [backtab] #'backward-button)
 
-(when (featurep 'evil)
-  (evil-define-key* 'normal +doom-dashboard-mode-map
-    "j" #'forward-button
-    "k" #'backward-button
-    "n"       #'forward-button
-    "p"       #'backward-button
-    "\C-n"    #'forward-button
-    "\C-p"    #'backward-button
-    [down]    #'forward-button
-    [up]      #'backward-button
-    [tab]     #'forward-button
-    [backtab] #'backward-button)
-  (define-key! +doom-dashboard-mode-map
-    [left-margin mouse-1]      #'ignore
-    [remap evil-next-visual-line]     #'forward-button
-    [remap evil-previous-visual-line] #'backward-button
-    [remap evil-delete]        #'ignore
-    [remap evil-delete-line]   #'ignore
-    [remap evil-insert]        #'ignore
-    [remap evil-append]        #'ignore
-    [remap evil-replace]       #'ignore
-    [remap evil-replace-state] #'ignore
-    [remap evil-change]        #'ignore
-    [remap evil-change-line]   #'ignore
-    [remap evil-visual-char]   #'ignore
-    [remap evil-visual-line]   #'ignore))
+(map! :when (featurep 'evil)
+      :map +doom-dashboard-mode-map
+      :n "j"       #'forward-button
+      :n "k"       #'backward-button
+      :n "n"       #'forward-button
+      :n "p"       #'backward-button
+      :n "C-n"     #'forward-button
+      :n "C-p"     #'backward-button
+      :n [down]    #'forward-button
+      :n [up]      #'backward-button
+      :n [tab]     #'forward-button
+      :n [backtab] #'backward-button
+      [left-margin mouse-1]      #'ignore
+      [remap evil-next-visual-line]     #'forward-button
+      [remap evil-previous-visual-line] #'backward-button
+      [remap evil-delete]        #'ignore
+      [remap evil-delete-line]   #'ignore
+      [remap evil-insert]        #'ignore
+      [remap evil-append]        #'ignore
+      [remap evil-replace]       #'ignore
+      [remap evil-replace-state] #'ignore
+      [remap evil-change]        #'ignore
+      [remap evil-change-line]   #'ignore
+      [remap evil-visual-char]   #'ignore
+      [remap evil-visual-line]   #'ignore)
 
 
 ;;
@@ -420,17 +419,13 @@ controlled by `+doom-dashboard-pwd-policy'."
                          'help-echo label)
                         (format "%-37s" (buffer-string)))
                       ;; Lookup command keys dynamically
-                      (or (let ((maps (list global-map)))
-                            (when (bound-and-true-p evil-normal-state-map)
-                              (push evil-motion-state-map maps)
-                              (push evil-normal-state-map maps))
-                            (when-let* ((key (where-is-internal action maps t)))
-                              (propertize (with-temp-buffer
-                                            (save-excursion (insert (key-description key)))
-                                            (while (re-search-forward "<\\([^>]+\\)>" nil t)
-                                              (replace-match (upcase (substring (match-string 1) 0 3))))
-                                            (buffer-string))
-                                          'face 'font-lock-constant-face)))
+                      (or (when-let* ((key (where-is-internal action nil t)))
+                            (propertize (with-temp-buffer
+                                          (save-excursion (insert (key-description key)))
+                                          (while (re-search-forward "<\\([^>]+\\)>" nil t)
+                                            (replace-match (upcase (substring (match-string 1) 0 3))))
+                                          (buffer-string))
+                                        'face 'font-lock-constant-face))
                           ""))))
            (if (display-graphic-p)
                "\n\n"

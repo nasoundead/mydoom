@@ -145,9 +145,9 @@ See `+format/buffer' for the interactive version of this function, and
                   ((eq output t) 'noop)
                   ((let ((tmpfile (make-temp-file "doom-format"))
                          (patchbuf (get-buffer-create " *doom format patch*"))
-                         ;; (coding-system-for-read 'utf-8)
-                         ;; (coding-system-for-write 'utf-8)
-                         )
+                         ;(coding-system-for-read 'utf-8)
+                         ;(coding-system-for-write 'utf-8)
+						 )
                      (unwind-protect
                          (progn
                            (with-current-buffer patchbuf

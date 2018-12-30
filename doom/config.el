@@ -19,8 +19,16 @@
 ;; (setq doom-font (font-spec :family "Source Code Pro"
 ;;                             :size 15))
 
-(setq doom-font (font-spec :family "Fira Mono"
-                            :size 15))
+;; (setq doom-font (font-spec :family "Fira Mono"
+;;                             :size 15))
+							
+(setq doom-font (font-spec :family "Fira Mono" :size 15)
+      doom-variable-pitch-font (font-spec :family "Fira Sans")
+      doom-unicode-font (font-spec :family "DejaVu Sans Mono")
+      doom-big-font (font-spec :family "Fira Mono" :size 19))	
+
+(setq doom-theme 'doom-tomorrow-night)	  
+;; (setq doom-theme 'doom-peacock)	  
 (when IS-WINDOWS
 ;; Setting English Font
 ;; (set-face-attribute 'default nil :font "Monaco 11")

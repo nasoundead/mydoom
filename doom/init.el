@@ -33,7 +33,6 @@
        (popup            ; tame sudden yet inevitable temporary windows
         +all             ; catch all popups that start with an asterix
         +defaults)       ; default popup rules
-       ;(pretty-code +fira)
        unicode           ; extended unicode support for various languages
        vc-gutter         ; vcs diff in the fringe
        vi-tilde-fringe   ; fringe tildes to mark beyond EOB
@@ -45,7 +44,7 @@
        rotate-text       ; cycle region at point between text candidates
 
        :emacs
-       dired             ; making dired pretty [functional]
+      (dired +icons)             ; making dired pretty [functional]
        ediff             ; comparing files in Emacs
        electric          ; smarter, keyword-based electric-indent
        eshell            ; a consistent, cross-platform shell (WIP)
@@ -61,15 +60,15 @@
        magit             ; a git porcelain for Emacs
        pdf               ; pdf enhancements
        rgb               ; creating color strings
-	   lsp               ; lsp
+	   ;lsp               ; lsp
 
 
        :lang
        (cc +irony +rtags); C/C++/Obj-C madness
        emacs-lisp        ; drown in parentheses
-       (go +lsp)         ; the hipster dialect
+       go                ; the hipster dialect
        rust              ; rust
-       (javascript +lsp) ; all(hope(abandon(ye(who(enter(here))))))
+       javascript        ; all(hope(abandon(ye(who(enter(here))))))
        markdown          ; writing docs for people to ignore
        (org              ; organize your plain life in plain text
         +attach          ; custom attachment system
@@ -78,9 +77,9 @@
         +export          ; Exporting org to whatever you want
         +present)        ; Emacs for presentations
        plantuml          ; diagrams for confusing people more
-      (python +pyvenv +lsp)   ; beautiful is better than ugly
+       (python +pyvenv)   ; beautiful is better than ugly
        rest              ; Emacs as a REST client
-       (web +lsp)        ; the tubes
+       web        ; the tubes
 
        ;; Applications are complex and opinionated modules that transform Emacs
        ;; toward a specific purpose. They may have additional dependencies and
@@ -105,5 +104,5 @@
        ;; provides a Spacemacs-inspired keybinding scheme, a custom yasnippet
        ;; library, and additional ex commands for evil-mode. Use it as a
        ;; reference for your own modules.
-       (default +bindings +snippets +evil-commands))
+       (default +bindings +smartparens))
 

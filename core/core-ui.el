@@ -126,15 +126,6 @@ size.")
                 all-the-icons-wicon all-the-icons-alltheicon))
     (advice-add fn :around #'doom*disable-all-the-icons-in-tty)))
 
-;; symbol-overlays
-(def-package! symbol-overlay
-  :bind (("M-i" . symbol-overlay-put)
-         ([C-f3] . symbol-overlay-put)
-         ([f3] . symbol-overlay-jump-next)
-         ([S-f3] . symbol-overlay-jump-prev)
-         ([M-f3] . symbol-overlay-remove-all))
-  :hook ((prog-mode) . symbol-overlay-mode))
-
 ;; `hide-mode-line-mode'
 (add-hook 'completion-list-mode-hook #'hide-mode-line-mode)
 (add-hook 'Man-mode-hook #'hide-mode-line-mode)
@@ -162,14 +153,6 @@ size.")
       visual-fill-column-width
       ;; take Emacs 26 line numbers into account
       (+ (if EMACS26+ 6 0) fill-column))
-
-(defun doom*hide-undefined-which-key-binds (bindings)
-  (cl-loop for bind in bindings
-           if (or (member (cdr bind) '("Prefix Command" "??"))
-                  (fboundp (intern (cdr bind))))
-           collect bind))
-(advice-add #'which-key--get-current-bindings :filter-return #'doom*hide-undefined-which-key-binds)
-(advice-add #'which-key--get-keymap-bindings :filter-return #'doom*hide-undefined-which-key-binds)
 
 
 ;;
@@ -463,9 +446,9 @@ instead). Meant for `kill-buffer-query-functions'."
     (set (make-local-variable 'whitespace-style)
          (if (or (bound-and-true-p whitespace-mode)
                  (bound-and-true-p whitespace-newline-mode))
-             (cl-union (if indent-tabs-mode '(tabs tab-mark) '(spaces space-mark))
+             (cl-union (if indent-tabs-mode '(spaces space-mark) '(tabs tab-mark))
                        whitespace-style)
-           `(face ,@(if indent-tabs-mode '(tabs tab-mark) '(spaces space-mark))
+           `(face ,@(if indent-tabs-mode '(spaces space-mark) '(tabs tab-mark))
              trailing-lines tail)))
     (whitespace-mode +1)))
 

@@ -12,8 +12,7 @@
   (when (featurep! :feature syntax-checker)
     (setq haskell-process-show-overlays nil))  ; flycheck makes this unnecessary
   (add-hook! 'haskell-mode-hook
-    #'(subword-mode           ; improves text navigation with camelCase
-       haskell-collapse-mode  ; support folding haskell code blocks
+    #'(haskell-collapse-mode  ; support folding haskell code blocks
        interactive-haskell-mode))
   (set-lookup-handlers! 'haskell-mode :definition #'haskell-mode-jump-to-def-or-tag)
   (set-file-template! 'haskell-mode :trigger #'haskell-auto-insert-module-template :project t)
@@ -21,11 +20,10 @@
 
   (add-to-list 'completion-ignored-extensions ".hi")
 
-  (map! :map haskell-mode-map
-        :localleader
+  (map! :localleader
+        :map haskell-mode-map
         ;; this is set to use cabal for dante users and stack for intero users:
-        :n "b" #'haskell-process-cabal-build
-        :n "c" #'haskell-cabal-visit-file
-        :v "h" #'haskell-hide-toggle
-        :nv "H" #'haskell-hide-toggle-all))
-
+        "b" #'haskell-process-cabal-build
+        "c" #'haskell-cabal-visit-file
+        "h" #'haskell-hide-toggle
+        "H" #'haskell-hide-toggle-all))
