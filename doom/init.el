@@ -17,7 +17,7 @@
        :completion
        (company          ; the ultimate code completion backend
         +auto)           ; as-you-type code completion
-       (ivy              ; a search engine for love and life
+       (helm              ; a search engine for love and life
         +fuzzy)          ; enable fuzzy search backend for ivy
 
        :ui
