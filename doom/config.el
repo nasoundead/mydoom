@@ -15,12 +15,11 @@
 ;;
 ;; Config
 ;;
-
+(def-package! tiny
+  :config)
 ;; (setq doom-font (font-spec :family "Source Code Pro"
 ;;                             :size 15))
 
-;; (setq doom-font (font-spec :family "Fira Mono"
-;;                             :size 15))
 
 (setq doom-font (font-spec :family "Fira Mono" :size 15)
       doom-variable-pitch-font (font-spec :family "Fira Sans")
