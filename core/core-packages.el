@@ -15,22 +15,18 @@
 ;; plugins to install and where from.
 ;;
 ;; Why all the trouble? Because:
-;; 1. Scriptability: I live in the command line. I want a programmable
-;;    alternative to `list-packages' for updating and installing packages.
-;; 2. Flexibility: I want packages from sources other than ELPA. Primarily
-;;    github, because certain plugins are out-of-date through official channels,
-;;    have changed hands, have a superior fork, or simply aren't in any ELPA
-;;    repo.
-;; 3. Stability: I used Cask before this. It would error out with cyrptic errors
-;;    depending on the version of Emacs I used and the alignment of the planets.
-;;    No more.
-;; 4. Performance: A minor point, but this system is lazy-loaded (more so if you
-;;    byte-compile). Not having to initialize package.el (or check that your
-;;    packages are installed) every time you start up Emacs affords us precious
-;;    seconds.
-;; 5. Simplicity: No Cask, no external dependencies (unless you count make),
-;;    just Emacs. Arguably, my config is still over-complicated, but shhh, it's
-;;    fine. Everything is fine.
+;; 1. *Scriptability:* I live in the command line. I want a shell-scriptable
+;;    interface for updating and installing Emacs packages.
+;; 2. *Reach:* I want packages from sources other than ELPA (like github or
+;;    gitlab). Some plugins are out-of-date through official channels, have
+;;    changed hands, have a superior fork, or simply aren't available in ELPA
+;;    repos.
+;; 3. *Performance:* The package management system isn't loaded until you use
+;;    the package management API. Not having to initialize package.el or quelpa
+;;    (and check that your packages are installed) every time you start up (or
+;;    load a package) speeds things up a great deal.
+;; 4. *Separation of concerns:* It's more organized and reduces cognitive load
+;;    to separate configuring of packages and installing/updating them.
 ;;
 ;; You should be able to use package.el commands without any conflicts.
 ;;
@@ -41,42 +37,48 @@
 package's name as a symbol, and whose CDR is the plist supplied to its
 `package!' declaration. Set by `doom-initialize-packages'.")
 
-(defvar doom-core-packages '(persistent-soft use-package quelpa async)
+(defvar doom-core-packages
+  '(persistent-soft use-package quelpa async)
   "A list of packages that must be installed (and will be auto-installed if
 missing) and shouldn't be deleted.")
 
 (defvar doom-disabled-packages ()
-  "A list of packages that should be ignored by `def-package!'.")
+  "A list of packages that should be ignored by `def-package!' and `after!'.")
 
+;;; package.el
 (setq package--init-file-ensured t
       package-user-dir (expand-file-name "elpa" doom-packages-dir)
       package-gnupghome-dir (expand-file-name "gpg" doom-packages-dir)
       package-enable-at-startup nil
-      package-archives
-      '(;("gnu"   . "https://elpa.gnu.org/packages/")
-        ;("melpa" . "https://melpa.org/packages/")
-	("melpa" . "http://elpa.emacs-china.org/melpa/")
-        ("gnu"   . "http://elpa.emacs-china.org/gnu/")
-        ("org"   . "https://orgmode.org/elpa/"))
       ;; I omit Marmalade because its packages are manually submitted rather
       ;; than pulled, so packages are often out of date with upstream.
+      package-archives
+      `(("gnu"          . "http://elpa.emacs-china.org/gnu/")
+        ("melpa"        . "http://elpa.emacs-china.org/melpa/")
+        ("org"          . "http://elpa.emacs-china.org/org/")))
+
+;; Don't save `package-selected-packages' to `custom-file'
+(advice-add #'package--save-selected-packages :override
+            (lambda (&optional value) (if value (setq package-selected-packages value))))
+
+(when (or (not gnutls-verify-error)
+          (not (ignore-errors (gnutls-available-p))))
+  (dolist (archive package-archives)
+    (setcdr archive (replace-regexp-in-string "^https://" "http://" (cdr archive) t nil))))
+
+;;; quelpa
+(setq quelpa-dir (expand-file-name "quelpa" doom-packages-dir)
+      quelpa-verbose doom-debug-mode
 
       ;; Don't track MELPA, we'll use package.el for that
       quelpa-checkout-melpa-p nil
       quelpa-update-melpa-p nil
       quelpa-melpa-recipe-stores nil
-      quelpa-self-upgrade-p nil
-      quelpa-verbose doom-debug-mode
-      quelpa-dir (expand-file-name "quelpa" doom-packages-dir))
-
-;; accommodate INSECURE setting
-(unless gnutls-verify-error
-  (dolist (archive package-archives)
-    (setcdr archive (replace-regexp-in-string "^https://" "http://" (cdr archive) t nil))))
+      quelpa-self-upgrade-p nil)
 
 
 ;;
-;; Bootstrapper
+;;; Bootstrapper
 
 (defun doom-initialize-packages (&optional force-p)
   "Ensures that Doom's package management system, package.el and quelpa are
@@ -89,56 +91,31 @@ If FORCE-P is 'internal, only (re)populate `doom-packages'.
 Use this before any of package.el, quelpa or Doom's package management's API to
 ensure all the necessary package metadata is initialized and available for
 them."
-  (with-temp-buffer ; prevent buffer-local settings from propagating
-    (let ((load-prefer-newer t)) ; reduce stale code issues
-      ;; package.el and quelpa handle themselves if their state changes during
-      ;; the current session, but if you change an packages.el file in a module,
-      ;; there's no non-trivial way to detect that, so we give you a way to
-      ;; reload only doom-packages (by passing 'internal as FORCE-P).
-      (unless (eq force-p 'internal)
-        ;; `package-alist'
-        (when (or force-p (not (bound-and-true-p package-alist)))
-          (doom-ensure-packages-initialized 'force)
-          (setq load-path (cl-remove-if-not #'file-directory-p load-path)))
-        ;; `quelpa-cache'
-        (when (or force-p (not (bound-and-true-p quelpa-cache)))
-          ;; ensure un-byte-compiled version of quelpa is loaded
-          (unless (featurep 'quelpa)
-            (load (locate-library "quelpa.el") nil t t))
-          (setq quelpa-initialized-p nil)
-          (or (quelpa-setup-p)
-              (error "Could not initialize quelpa"))))
-      ;; `doom-packages'
-      (when (or force-p (not doom-packages))
-        (cl-flet
-            ((_load
-              (lambda (file &optional noerror)
-                (condition-case e
-                    (load file noerror t t)
-                  ((debug error)
-                   (signal 'doom-package-error
-                           (list (or (doom-module-from-path file)
-                                     '(:private . packages))
-                                 e)))))))
-          (let ((doom-modules (doom-modules))
-                (doom--stage 'packages)
-                (noninteractive t))
-            (setq doom-packages nil)
-            (_load (expand-file-name "packages.el" doom-core-dir))
-            ;; We load the private packages file twice to ensure disabled
-            ;; packages are seen ASAP, and a second time to ensure privately
-            ;; overridden packages are properly overwritten.
-            (let ((private-packages (expand-file-name "packages.el" doom-private-dir)))
-              (_load private-packages t)
-              (cl-loop for key being the hash-keys of doom-modules
-                       for path = (doom-module-path (car key) (cdr key) "packages.el")
-                       do (let ((doom--current-module key)) (_load path t)))
-              (_load private-packages t)
-              (setq doom-packages (reverse doom-packages)))))))))
+  (let ((load-prefer-newer t)) ; reduce stale code issues
+    ;; package.el and quelpa handle themselves if their state changes during the
+    ;; current session, but if you change a packages.el file in a module,
+    ;; there's no non-trivial way to detect that, so to reload only
+    ;; `doom-packages' pass 'internal as FORCE-P or use `doom/reload-packages'.
+    (unless (eq force-p 'internal)
+      ;; `package-alist'
+      (when (or force-p (not (bound-and-true-p package-alist)))
+        (doom-ensure-packages-initialized 'force)
+        (setq load-path (cl-delete-if-not #'file-directory-p load-path)))
+      ;; `quelpa-cache'
+      (when (or force-p (not (bound-and-true-p quelpa-cache)))
+        ;; ensure un-byte-compiled version of quelpa is loaded
+        (unless (featurep 'quelpa)
+          (load (locate-library "quelpa.el") nil t t))
+        (setq quelpa-initialized-p nil)
+        (or (quelpa-setup-p)
+            (error "Could not initialize quelpa"))))
+    ;; `doom-packages'
+    (when (or force-p (not doom-packages))
+      (setq doom-packages (doom-package-list)))))
 
 
 ;;
-;; Package API
+;;; Package API
 
 (defun doom-ensure-packages-initialized (&optional force-p)
   "Make sure package.el is initialized."
@@ -155,7 +132,7 @@ them."
 
 (defun doom-ensure-core-packages ()
   "Make sure `doom-core-packages' are installed."
-  (when-let* ((core-packages (cl-remove-if #'package-installed-p doom-core-packages)))
+  (when-let (core-packages (cl-remove-if #'package-installed-p doom-core-packages))
     (message "Installing core packages")
     (unless doom--refreshed-p
       (package-refresh-contents))
@@ -171,7 +148,7 @@ them."
 ;;
 ;; Module package macros
 
-(cl-defmacro package! (name &rest plist &key recipe pin disable _ignore _freeze)
+(cl-defmacro package! (name &rest plist &key built-in recipe pin disable ignore _freeze)
   "Declares a package and how to install it (if applicable).
 
 This macro is declarative and does not load nor install packages. It is used to
@@ -195,40 +172,60 @@ Accepts the following properties:
    Do not install this package.
  :freeze FORM
    Do not update this package if FORM is non-nil.
+ :built-in BOOL
+   Same as :ignore if the package is a built-in Emacs package. If set to
+   'prefer, will use built-in package if it is present.
 
 Returns t if package is successfully registered, and nil if it was disabled
 elsewhere."
   (declare (indent defun))
   (doom--assert-stage-p 'packages #'package!)
-  (let ((plist (append plist (cdr (assq name doom-packages)))))
+  (let ((old-plist (cdr (assq name doom-packages))))
     (when recipe
       (when (cl-evenp (length recipe))
         (setq plist (plist-put plist :recipe (cons name recipe))))
       (setq pin nil
             plist (plist-put plist :pin nil)))
-    (when (file-in-directory-p (FILE!) doom-private-dir)
-      (setq plist (plist-put plist :private t)))
-    (let (newplist)
-      (while plist
-        (unless (null (cadr plist))
-          (push (cadr plist) newplist)
-          (push (car plist) newplist))
-        (pop plist)
-        (pop plist))
-      (setq plist newplist))
+    (let ((module-list (plist-get old-plist :modules))
+          (module (or doom--current-module
+                      (let ((file (FILE!)))
+                        (cond ((file-in-directory-p file doom-private-dir)
+                               (list :private))
+                              ((file-in-directory-p file doom-core-dir)
+                               (list :core))
+                              ((doom-module-from-path file)))))))
+      (unless (member module module-list)
+        (setq module-list (append module-list (list module) nil)
+              plist (plist-put plist :modules module-list))))
+    (when built-in
+      (doom-log "Ignoring built-in package %S" name)
+      (when (equal built-in '(quote prefer))
+        (setq built-in `(locate-library ,(symbol-name name) nil doom-site-load-path))))
+    (setq plist (plist-put plist :ignore (or built-in ignore)))
+    (while plist
+      (unless (null (cadr plist))
+        (setq old-plist (plist-put old-plist (car plist) (cadr plist))))
+      (pop plist)
+      (pop plist))
+    (setq plist old-plist)
     (macroexp-progn
-     (append (if disable `((add-to-list 'doom-disabled-packages ',name nil #'eq)))
-             (if pin `((setf (alist-get ',name package-pinned-packages) ,pin)))
-             `((setf (alist-get ',name doom-packages) ',plist)
-               (not (memq ',name doom-disabled-packages)))))))
+     (append (when pin
+               (doom-log "Pinning package '%s' to '%s'" name pin)
+               `((setf (alist-get ',name package-pinned-packages) ,pin)))
+             `((setf (alist-get ',name doom-packages) ',plist))
+             (when disable
+               (doom-log "Disabling package '%s'" name)
+               `((add-to-list 'doom-disabled-packages ',name nil 'eq)
+                 nil))))))
 
 (defmacro packages! (&rest packages)
-  "A convenience macro like `package!', but allows you to declare multiple
-packages at once.
+  "A convenience macro for `package!' for declaring multiple packages at once.
 
 Only use this macro in a module's packages.el file."
   (doom--assert-stage-p 'packages #'packages!)
-  `(progn ,@(cl-loop for desc in packages collect `(package! ,@(doom-enlist desc)))))
+  (macroexp-progn
+   (cl-loop for desc in packages
+            collect (macroexpand `(package! ,@(doom-enlist desc))))))
 
 (defmacro disable-packages! (&rest packages)
   "A convenience macro like `package!', but allows you to disable multiple
@@ -236,21 +233,9 @@ packages at once.
 
 Only use this macro in a module's packages.el file."
   (doom--assert-stage-p 'packages #'disable-packages!)
-  `(setq doom-disabled-packages (append ',packages doom-disabled-packages)))
-
-(defmacro depends-on! (module submodule &optional flags)
-  "Declares that this module depends on another.
-
-Only use this macro in a module's packages.el file.
-
-MODULE is a keyword, and SUBMODULE is a symbol. Under the hood, this simply
-loads MODULE SUBMODULE's packages.el file."
-  (doom--assert-stage-p 'packages #'depends-on!)
-  `(let ((doom-modules ,doom-modules)
-         (flags ,flags))
-     (when flags
-       (doom-module-put ,module ',submodule :flags flags))
-     (load! "packages" ,(doom-module-locate-path module submodule) t)))
+  (macroexp-progn
+   (cl-loop for pkg in packages
+            collect (macroexpand `(package! ,pkg :disable t)))))
 
 (provide 'core-packages)
 ;;; core-packages.el ends here

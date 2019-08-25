@@ -10,15 +10,15 @@ ignore the cache."
     (or (and (not refresh-p)
              (gethash project-root +javascript-npm-conf))
         (let ((package-file (expand-file-name "package.json" project-root)))
-          (when-let* ((json (and (file-exists-p package-file)
-                                 (require 'json)
-                                 (json-read-file package-file))))
+          (when-let (json (and (file-exists-p package-file)
+                               (require 'json)
+                               (json-read-file package-file)))
             (puthash project-root json +javascript-npm-conf))))))
 
 ;;;###autoload
 (defun +javascript-npm-dep-p (packages &optional project-root refresh-p)
-  (when-let* ((data (and (bound-and-true-p +javascript-npm-mode)
-                         (+javascript-npm-conf project-root refresh-p))))
+  (when-let (data (and (bound-and-true-p +javascript-npm-mode)
+                       (+javascript-npm-conf project-root refresh-p)))
     (let ((deps (append (cdr (assq 'dependencies data))
                         (cdr (assq 'devDependencies data)))))
       (cond ((listp packages)
@@ -36,7 +36,7 @@ ignore the cache."
 ;; Commands
 
 ;;;###autoload
-(defun +javascript/repl ()
+(defun +javascript/open-repl ()
   "Open a Javascript REPL. Meaning either `skewer-repl', if any of the
 skewer-*-mode's are enabled, or `nodejs-repl' otherwise."
   (interactive)
@@ -44,7 +44,8 @@ skewer-*-mode's are enabled, or `nodejs-repl' otherwise."
    (if (and (featurep 'skewer-mode)
             (or skewer-mode skewer-css-mode skewer-html-mode))
        #'skewer-repl
-     #'nodejs-repl)))
+     #'nodejs-repl))
+  (current-buffer))
 
 ;;;###autoload
 (defun +javascript/skewer-this-buffer ()

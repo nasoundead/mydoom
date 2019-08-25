@@ -13,20 +13,22 @@
 (defun =calendar ()
   "Activate (or switch to) `calendar' in its workspace."
   (interactive)
-  (if (featurep! :feature workspaces)
+  (if (featurep! :ui workspaces)
       (progn
         (+workspace-switch "Calendar" t)
+        (doom/switch-to-scratch-buffer)
         (+calendar--init)
         (+workspace/display))
     (setq +calendar--wconf (current-window-configuration))
     (delete-other-windows)
+    (switch-to-buffer (doom-fallback-buffer))
     (+calendar--init)))
 
 ;;;###autoload
 (defun +calendar/quit ()
   "TODO"
   (interactive)
-  (if (featurep! :feature workspaces)
+  (if (featurep! :ui workspaces)
       (+workspace/delete "Calendar")
     (doom-kill-matching-buffers "^\\*cfw:")
     (set-window-configuration +calendar--wconf)
@@ -40,7 +42,7 @@
    ;; :custom-map cfw:my-cal-map
    :contents-sources
    (list
-    (cfw:org-create-source (doom-color 'fg))  ; orgmode source
+    (cfw:org-create-source (face-foreground 'default))  ; orgmode source
     )))
 
 ;;;###autoload

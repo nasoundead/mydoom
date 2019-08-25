@@ -11,7 +11,7 @@
 enabling unicode symbols in math regions. This requires the unicode-math latex
 package to be installed.")
 
-(defvar +latex-viewers `(skim zathura okular pdf-tools)
+(defvar +latex-viewers `(skim sumatrapdf zathura okular pdf-tools)
   "A list of enabled latex viewers to use, in this order. If they don't exist,
 they will be ignored. Recognized viewers are skim, zathura, okular and
 pdf-tools.
@@ -54,6 +54,8 @@ If no viewers are found, `latex-preview-pane' is used.")
   (add-hook 'TeX-mode-hook #'visual-line-mode)
   ;; Fold TeX macros
   (add-hook 'TeX-mode-hook #'TeX-fold-mode)
+  ;; Enable rainbow mode after applying styles to the buffer
+  (add-hook 'TeX-mode-hook #'rainbow-delimiters-mode)
   ;; display output of latex commands in popup
   (set-popup-rule! " output\\*$" :size 15)
   ;; Do not prompt for Master files, this allows auto-insert to add templates to
@@ -63,10 +65,7 @@ If no viewers are found, `latex-preview-pane' is used.")
     (remove-hook 'find-file-hook
                  (cl-find-if #'byte-code-function-p find-file-hook)
                  'local))
-  ;; Enable rainbow mode after applying styles to the buffer
-  (add-hook 'TeX-update-style-hook #'rainbow-delimiters-mode)
-  (when (featurep! :feature spellcheck)
-    (add-hook 'TeX-mode-local-vars-hook #'flyspell-mode))
+  (add-hook 'latex-mode-local-vars-hook #'flyspell-mode!)
   ;; All these excess pairs dramatically slow down typing in latex buffers, so
   ;; we remove them. Let snippets do their job.
   (after! smartparens-latex

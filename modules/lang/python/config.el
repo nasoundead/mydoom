@@ -1,18 +1,12 @@
 ;;; lang/python/config.el -*- lexical-binding: t; -*-
 
-(defconst +python-mode-line-indicator '("" +python--version)
-  "Format for the python version/env indicator in the mode-line.")
-
-(defvar +python-ipython-repl-args "-i --simple-prompt --no-color-info"
+(defvar +python-ipython-repl-args '("-i" "--simple-prompt" "--no-color-info")
   "CLI arguments to initialize ipython with when `+python/open-ipython-repl' is
 called.")
 
-(defvar +python-jupyter-repl-args "--simple-prompt"
+(defvar +python-jupyter-repl-args '("--simple-prompt")
   "CLI arguments to initialize 'jupiter console %s' with when
 `+python/open-ipython-repl' is called.")
-
-(defvar-local +python--version nil
-  "The python version in the current buffer.")
 
 
 ;;
@@ -24,9 +18,9 @@ called.")
   (setq python-environment-directory doom-cache-dir
         python-indent-guess-indent-offset-verbose nil)
   :config
-  (set-env! "PYTHONPATH" "PYENV_ROOT" "ANACONDA_HOME")
   (set-electric! 'python-mode :chars '(?:))
-  (set-repl-handler! 'python-mode #'+python/repl)
+  (set-repl-handler! 'python-mode #'+python/open-repl)
+  (set-docsets! 'python-mode "Python 3" "NumPy" "SciPy")
 
   (set-pretty-symbols! 'python-mode
     ;; Functional
@@ -46,24 +40,24 @@ called.")
     :for "for"
     :return "return" :yield "yield")
 
+  (when (featurep! +lsp)
+    (add-hook 'python-mode-local-vars-hook #'lsp!))
+
   (define-key python-mode-map (kbd "DEL") nil) ; interferes with smartparens
   (sp-local-pair 'python-mode "'" nil
                  :unless '(sp-point-before-word-p
                            sp-point-after-word-p
                            sp-point-before-same-p))
 
-  (setq-hook! 'python-mode-hook tab-width python-indent-offset)
+  ;; Affects pyenv and conda
+  (advice-add #'pythonic-activate :after-while #'+modeline|update-env-in-all-windows)
+  (advice-add #'pythonic-deactivate :after #'+modeline|clear-env-in-all-windows)
 
-  ;; Add python/pipenv version string to the major mode in the modeline
-  (defun +python|adjust-mode-line ()
-    (setq mode-name +python-mode-line-indicator))
-  (add-hook 'python-mode-hook #'+python|adjust-mode-line)
-
-  (add-hook 'python-mode-hook #'+python|update-version))
+  (setq-hook! 'python-mode-hook tab-width python-indent-offset))
 
 
 (def-package! anaconda-mode
-  :hook python-mode
+  :hook (python-mode-local-vars . +python|init-anaconda-mode-maybe)
   :init
   (setq anaconda-mode-installation-directory (concat doom-etc-dir "anaconda/")
         anaconda-mode-eldoc-as-single-line t)
@@ -75,6 +69,10 @@ called.")
     :references #'anaconda-mode-find-references
     :documentation #'anaconda-mode-show-doc)
   (set-popup-rule! "^\\*anaconda-mode" :select nil)
+
+  (defun +python|init-anaconda-mode-maybe ()
+    (unless (bound-and-true-p lsp-mode)
+      (anaconda-mode +1)))
 
   (defun +python|auto-kill-anaconda-processes ()
     "Kill anaconda processes if this buffer is the last python buffer."
@@ -95,6 +93,17 @@ called.")
         "a" #'anaconda-mode-find-assignments
         "f" #'anaconda-mode-find-file
         "u" #'anaconda-mode-find-references))
+
+
+(def-package! pyimport
+  :after python
+  :config
+  (map! :map python-mode-map
+        :localleader
+        (:prefix ("i" . "insert")
+          :desc "Missing imports" "m" #'pyimport-insert-missing)
+        (:prefix ("r" . "remove")
+          :desc "Unused imports" "r" #'pyimport-remove-unused)))
 
 
 (def-package! nose
@@ -128,21 +137,11 @@ called.")
         :prefix "t"
         "f" #'python-pytest-file
         "k" #'python-pytest-file-dwim
-        "m" #'python-pytest-repeat
+        "t" #'python-pytest-function
+        "m" #'python-pytest-function-dwim
+        "r" #'python-pytest-repeat
         "p" #'python-pytest-popup))
 
-;;
-;; lsp
-(when (featurep! +lsp)
-  (after! python
-    ;; (lsp-define-stdio-client lsp-python "python"
-    ;;                          #'projectile-project-root
-    ;;                          '("pyls"))
-    (lsp-register-client
-      (make-lsp-client :new-connection (lsp-stdio-connection "pyls")
-                       :major-modes '(python-mode)
-                       :server-id 'pyls))
-    (add-hook! python-mode #'lsp)))
 
 ;;
 ;; Environment management
@@ -159,10 +158,20 @@ called.")
                          (_ (pipenv-project-p)))
                    (format "PIPENV_MAX_DEPTH=9999 %s run %%c %%o %%s %%a" bin)
                  "%c %o %s %a")))
-      (:description . "Run Python script")))
+      (:description . "Run Python script"))))
 
-  (advice-add #'pipenv-activate   :after-while #'+python|update-version-in-all-buffers)
-  (advice-add #'pipenv-deactivate :after-while #'+python|update-version-in-all-buffers))
+
+(def-package! pyvenv
+  :after python
+  :init
+  (when (featurep! :ui modeline)
+    (add-hook 'pyvenv-post-activate-hooks #'+modeline|update-env-in-all-windows)
+    (add-hook 'pyvenv-pre-deactivate-hooks #'+modeline|clear-env-in-all-windows))
+  :config
+  (add-hook 'hack-local-variables-hook #'pyvenv-track-virtualenv)
+  (add-to-list 'global-mode-string
+               '(pyvenv-virtual-env-name (" venv:" pyvenv-virtual-env-name " "))
+               'append))
 
 
 (def-package! pyenv-mode
@@ -171,21 +180,7 @@ called.")
   :config
   (pyenv-mode +1)
   (when (executable-find "pyenv")
-    (add-to-list 'exec-path (expand-file-name "shims" (or (getenv "PYENV_ROOT") "~/.pyenv"))))
-  (advice-add #'pyenv-mode-set :after #'+python|update-version-in-all-buffers)
-  (advice-add #'pyenv-mode-unset :after #'+python|update-version-in-all-buffers))
-
-
-(def-package! pyvenv
-  :when (featurep! +pyvenv)
-  :after python
-  :config
-  (defun +python-current-pyvenv () pyvenv-virtual-env-name)
-  (add-hook 'pyvenv-post-activate-hooks #'+python|update-version-in-all-buffers)
-  (add-hook 'pyvenv-post-deactivate-hooks #'+python|update-version-in-all-buffers)
-  (add-to-list '+python-mode-line-indicator
-               '(pyvenv-virtual-env-name (" venv:" pyvenv-virtual-env-name))
-               'append))
+    (add-to-list 'exec-path (expand-file-name "shims" (or (getenv "PYENV_ROOT") "~/.pyenv")))))
 
 
 (def-package! conda
@@ -221,9 +216,7 @@ called.")
   ;; integration with term/eshell
   (conda-env-initialize-interactive-shells)
   (after! eshell (conda-env-initialize-eshell))
-
-  (add-hook 'conda-postactivate-hook #'+python|update-version-in-all-buffers)
-  (add-hook 'conda-postdeactivate-hook #'+python|update-version-in-all-buffers)
-  (add-to-list '+python-mode-line-indicator
-               '(conda-env-current-name (" conda:" conda-env-current-name))
+ 
+  (add-to-list 'global-mode-string
+               '(conda-env-current-name (" conda:" conda-env-current-name " "))
                'append))

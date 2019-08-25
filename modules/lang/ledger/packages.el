@@ -3,8 +3,8 @@
 
 (package! ledger-mode)
 
-(when (featurep! :feature evil)
+(when (featurep! :editor evil)
   (package! evil-ledger))
 
-(when (featurep! :feature syntax-checker)
+(when (featurep! :tools flycheck)
   (package! flycheck-ledger))

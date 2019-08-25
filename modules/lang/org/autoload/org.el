@@ -34,7 +34,7 @@ current file). Only scans first 2048 bytes of the document."
 
 
 ;;
-;; Modes
+;;; Modes
 
 ;;;###autoload
 (define-minor-mode +org-pretty-mode
@@ -44,13 +44,13 @@ current file). Only scans first 2048 bytes of the document."
   :group 'evil-org
   (setq org-hide-emphasis-markers +org-pretty-mode)
   (org-toggle-pretty-entities)
-  (org-with-silent-modifications
+  (with-silent-modifications
    ;; In case the above un-align tables
    (org-table-map-tables 'org-table-align t)))
 
 
 ;;
-;; Commands
+;;; Commands
 
 ;;;###autoload
 (defun +org/dwim-at-point ()
@@ -78,19 +78,20 @@ If on a:
       (setq context (org-element-property :parent context)
             type (org-element-type context)))
     (pcase type
-      ((guard (org-element-property :checkbox (org-element-lineage context '(item) t)))
-       (let ((match (and (org-at-item-checkbox-p) (match-string 1))))
-         (org-toggle-checkbox (if (equal match "[ ]") '(16)))))
-
       (`headline
-       (cond ((org-element-property :todo-type context)
+       (cond ((and (fboundp 'toc-org-insert-toc)
+                   (member "TOC" (org-get-tags)))
+              (toc-org-insert-toc)
+              (message "Updating table of contents"))
+             ((string= "ARCHIVE" (car-safe (org-get-tags)))
+              (org-force-cycle-archived))
+             ((or (org-element-property :todo-type context)
+                  (org-element-property :scheduled context))
               (org-todo
                (if (eq (org-element-property :todo-type context) 'done)
                    (or (car (+org-get-todo-keywords-for (org-element-property :todo-keyword context)))
                        'todo)
                  'done)))
-             ((string= "ARCHIVE" (car-safe (org-get-tags)))
-              (org-force-cycle-archived))
              (t
               (+org/refresh-inline-images)
               (org-remove-latex-fragment-image-overlays)
@@ -119,7 +120,7 @@ If on a:
        (org-table-blank-field)
        (org-table-recalculate)
        (when (and (string-empty-p (string-trim (org-table-get-field)))
-                  (bound-and-true-p evil-mode))
+                  (bound-and-true-p evil-local-mode))
          (evil-change-state 'insert)))
 
       (`babel-call
@@ -142,17 +143,19 @@ If on a:
              (+org/refresh-inline-images)
            (org-open-at-point))))
 
+      ((guard (org-element-property :checkbox (org-element-lineage context '(item) t)))
+       (let ((match (and (org-at-item-checkbox-p) (match-string 1))))
+         (org-toggle-checkbox (if (equal match "[ ]") '(16)))))
+
       (_ (+org/refresh-inline-images)))))
 
-;;;###autoload
-(defun +org/insert-item (direction)
+(defun +org-insert-item (direction)
   "Inserts a new heading, table cell or item, depending on the context.
 DIRECTION can be 'above or 'below.
 
 I use this instead of `org-insert-item' or `org-insert-heading' which are too
 opinionated and perform this simple task incorrectly (e.g. whitespace in the
 wrong places)."
-  (interactive)
   (let* ((context
           (save-excursion
             (when (bolp)
@@ -221,7 +224,7 @@ wrong places)."
                 (save-excursion
                   (insert "\n")
                   (if (= level 1) (insert "\n")))))
-             (when-let* ((todo-keyword (org-element-property :todo-keyword context)))
+             (when-let (todo-keyword (org-element-property :todo-keyword context))
                (org-todo (or (car (+org-get-todo-keywords-for todo-keyword))
                              'todo)))))
 
@@ -229,8 +232,20 @@ wrong places)."
 
     (when (org-invisible-p)
       (org-show-hidden-entry))
-    (when (bound-and-true-p evil-mode)
+    (when (bound-and-true-p evil-local-mode)
       (evil-insert 1))))
+
+;;;###autoload
+(defun +org/insert-item-below (count)
+  (interactive "p")
+  (dotimes (_ count)
+    (+org-insert-item 'below)))
+
+;;;###autoload
+(defun +org/insert-item-above (count)
+  (interactive "p")
+  (dotimes (_ count)
+    (+org-insert-item 'above)))
 
 ;;;###autoload
 (defun +org/dedent ()
@@ -330,7 +345,7 @@ another level of headings on each invocation."
 
 
 ;;
-;; Hooks
+;;; Hooks
 
 ;;;###autoload
 (defun +org|delete-backward-char-and-realign-table-maybe ()
@@ -357,11 +372,11 @@ another level of headings on each invocation."
 
 ;;;###autoload
 (defun +org|indent-maybe ()
-  "Indent the current item (header or item), if possible. Made for
-`org-tab-first-hook' in evil-mode."
+  "Indent the current item (header or item), if possible.
+Made for `org-tab-first-hook' in evil-mode."
   (interactive)
-  (cond ((or (not (bound-and-true-p evil-mode))
-             (not (eq evil-state 'insert)))
+  (cond ((not (and (bound-and-true-p evil-local-mode)
+                   (evil-insert-state-p)))
          nil)
         ((org-at-item-p)
          (if (eq this-command 'org-shifttab)
@@ -400,12 +415,19 @@ another level of headings on each invocation."
 (defun +org|yas-expand-maybe ()
   "Tries to expand a yasnippet snippet, if one is available. Made for
 `org-tab-first-hook'."
-  (when (and (or (not (bound-and-true-p evil-mode))
-                 (eq evil-state 'insert))
-             (bound-and-true-p yas-minor-mode)
-             (yas--templates-for-key-at-point))
-    (call-interactively #'yas-expand)
-    t))
+  (when (bound-and-true-p yas-minor-mode)
+    (cond ((and (or (not (bound-and-true-p evil-local-mode))
+                    (evil-insert-state-p))
+                (yas--templates-for-key-at-point))
+           (call-interactively #'yas-expand)
+           t)
+          ((use-region-p)
+           ;; Triggering mode-specific indentation is expensive in src blocks
+           ;; (if `org-src-tab-acts-natively' is non-nil), and can cause errors,
+           ;; so we avoid smart indentation in this case.
+           (let ((yas-indent-line 'fixed))
+             (call-interactively #'yas-insert-snippet))
+           t))))
 
 ;;;###autoload
 (defun +org|cycle-only-current-subtree (&optional arg)
@@ -433,9 +455,38 @@ with `org-cycle')."
     (org-remove-occur-highlights)
     t))
 
+;;;###autoload
+(defun +org|unfold-to-2nd-level-or-point ()
+  "My version of the 'overview' #+STARTUP option: expand first-level headings.
+Expands the first level, but no further. If point was left somewhere deeper,
+unfold to point on startup."
+  (unless org-agenda-inhibit-startup
+    (when (eq org-startup-folded t)
+      (outline-hide-sublevels 2))
+    (when (outline-invisible-p)
+      (ignore-errors
+        (save-excursion
+          (outline-previous-visible-heading 1)
+          (org-show-subtree))))))
+
+;;;###autoload
+(defun +org|enable-auto-reformat-tables ()
+  "Realign tables & update formulas when exiting insert mode (`evil-mode')."
+  (when (featurep 'evil)
+    (add-hook 'evil-insert-state-exit-hook #'+org|realign-table-maybe nil t)
+    (add-hook 'evil-replace-state-exit-hook #'+org|realign-table-maybe nil t)
+    (advice-add #'evil-replace :after #'+org*realign-table-maybe)))
+
+;;;###autoload
+(defun +org|enable-auto-update-cookies ()
+  "Update statistics cookies when saving or exiting insert mode (`evil-mode')."
+  (when (featurep 'evil)
+    (add-hook 'evil-insert-state-exit-hook #'+org|update-cookies nil t))
+  (add-hook 'before-save-hook #'+org|update-cookies nil t))
+
 
 ;;
-;; Advice
+;;; Advice
 
 ;;;###autoload
 (defun +org*fix-newline-and-indent-in-src-blocks ()
@@ -460,3 +511,10 @@ an effect when `evil-org-special-o/O' has `item' in it (not the default)."
                (backward-char 1)
                (evil-append nil))))
     (funcall orig-fn count)))
+
+;;;###autoload
+(defun +org*display-link-in-eldoc (orig-fn &rest args)
+  "Display the link at point in eldoc."
+  (or (when-let (link (org-element-property :raw-link (org-element-context)))
+        (format "Link: %s" link))
+      (apply orig-fn args)))

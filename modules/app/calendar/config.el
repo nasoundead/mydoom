@@ -1,9 +1,5 @@
 ;;; app/calendar/config.el -*- lexical-binding: t; -*-
 
-(defvar +calendar-org-gcal-secret-file
-  (expand-file-name "private/org/secret.el" doom-modules-dir)
-  "TODO")
-
 (defvar +calendar-open-function #'+calendar/open-calendar
   "TODO")
 
@@ -28,8 +24,7 @@
 
   (define-key cfw:calendar-mode-map "q" #'+calendar/quit)
 
-  (when (featurep 'solaire-mode)
-    (add-hook 'cfw:calendar-mode-hook #'solaire-mode))
+  (add-hook 'cfw:calendar-mode-hook #'doom|mark-buffer-as-real)
   (add-hook 'cfw:calendar-mode-hook 'hide-mode-line-mode)
 
   (advice-add #'cfw:render-button :override #'+calendar*cfw:render-button))
@@ -48,7 +43,6 @@
              org-gcal-post-at-point
              org-gcal-delete-at-point)
   :config
-  (load-file +calendar-org-gcal-secret-file)
   ;; hack to avoid the deferred.el error
   (defun org-gcal--notify (title mes)
     (message "org-gcal::%s - %s" title mes)))

@@ -30,7 +30,7 @@
     :ok-statuses '(0 1))
 
   (setq web-mode-enable-html-entities-fontification t
-        web-mode-auto-close-style 2)
+        web-mode-auto-close-style 1)
 
   (after! smartparens
     (defun +web-is-auto-close-style-3 (_id action _context)
@@ -57,7 +57,7 @@
                                        (if (string-match "\\(?:>\\|]\\|}\\)+\\'" string)
                                            (replace-match "" t t string)
                                          string))))))
-    (delq (assq nil web-mode-engines-auto-pairs) web-mode-engines-auto-pairs))
+    (delq! nil web-mode-engines-auto-pairs))
 
   (map! :map web-mode-map
         (:localleader
@@ -139,3 +139,7 @@
   (set-company-backend! 'web-mode 'company-web-html))
 (after! slim-mode
   (set-company-backend! 'slim-mode 'company-web-slim))
+
+
+(when (featurep! +lsp)
+  (add-hook! (html-mode web-mode) #'lsp!))

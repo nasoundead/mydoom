@@ -1,12 +1,5 @@
 ;;; tools/prodigy/autoload.el -*- lexical-binding: t; -*-
 
-;; FIXME obsolete :service
-;;;###autoload
-(def-setting! :service (&rest plist)
-  "TODO"
-  `(after! prodigy
-     (prodigy-define-service ,@plist)))
-
 ;;;###autoload
 (defun +prodigy/create ()
   "Interactively create a new prodigy service."
@@ -19,7 +12,7 @@
   "Delete service at point. Asks for confirmation."
   (interactive "P")
   (prodigy-with-refresh
-   (when-let* ((service (prodigy-service-at-pos)))
+   (when-let (service (prodigy-service-at-pos))
      (let ((name (plist-get service :name)))
        (cond ((or arg
                   (y-or-n-p (format "Delete '%s' service?" name)))

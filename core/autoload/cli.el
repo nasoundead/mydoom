@@ -2,65 +2,78 @@
 
 (require 'core-cli)
 
-(defun doom--run (command &optional yes)
-  (let ((default-directory doom-emacs-dir)
-        (doom-auto-accept yes))
-    (let ((compilation-buffer-name-function (lambda (_) "*bin/doom*")))
-      (compile (format "bin/doom %s" command) t))
-    (while compilation-in-progress
-      (sit-for 1))
-    (when (y-or-n-p "Reload Doom config?")
-      (doom/reload))
-    (message "Done")))
+;;;###autoload
+(defun doom-cli-run (command &rest _args)
+  (when (featurep 'general)
+    (general-auto-unbind-keys))
+  (let* ((evil-collection-mode-list nil)
+         (default-directory doom-emacs-dir)
+         (buf (get-buffer-create " *bin/doom*"))
+         (doom-message-backend 'ansi)
+         (ignore-window-parameters t)
+         (noninteractive t)
+         (standard-output
+          (lambda (char)
+            (with-current-buffer buf
+              (insert char)
+              (when (memq char '(?\n ?\r))
+                (ansi-color-apply-on-region (line-beginning-position -1) (line-end-position))
+                (redisplay))))))
+    (doom-initialize t)
+    (setq doom-modules (doom-modules))
+    (doom-initialize-modules t)
+    (doom-initialize-packages t)
+    (with-current-buffer (switch-to-buffer buf)
+      (erase-buffer)
+      (require 'package)
+      (redisplay)
+      (doom-dispatch command nil)
+      (print! (green "\nDone!"))))
+  (when (featurep 'general)
+    (general-auto-unbind-keys 'undo))
+  (message (format! (green "Done!"))))
 
+
+;;;###autoload
+(defun doom//autoloads (&optional yes)
+  "TODO"
+  (interactive "P")
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "autoloads")))
 
 ;;;###autoload
 (defun doom//update (&optional yes)
   "TODO"
   (interactive "P")
-  (doom--run "update" yes))
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "update")))
 
 ;;;###autoload
 (defun doom//upgrade (&optional yes)
   "TODO"
   (interactive "P")
-  (doom--run "upgrade" yes))
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "upgrade"))
+  (when (y-or-n-p "You must restart Emacs for the upgrade to take effect. Restart?")
+    (doom/restart-and-restore)))
 
 ;;;###autoload
 (defun doom//install (&optional yes)
   "TODO"
   (interactive "P")
-  (doom--run "install" yes))
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "install")))
 
 ;;;###autoload
 (defun doom//autoremove (&optional yes)
   "TODO"
   (interactive "P")
-  (doom--run "autoremove" yes))
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "autoremove")))
 
 ;;;###autoload
 (defun doom//refresh (&optional yes)
   "TODO"
   (interactive "P")
-  (doom--run "refresh" yes))
-
-;;;###autoload
-(defun doom/reload (&optional force-p)
-  "Reloads your config. This is experimental!
-
-If called from a noninteractive session, this will try to communicate with a
-live server (if one is found) to tell it to run this function.
-
-If called from an interactive session, tries to reload autoloads files (if
-necessary), reinistalize doom (via `doom-initialize') and reloads your private
-init.el and config.el. Then runs `doom-reload-hook'."
-  (interactive "P")
-  (require 'core-cli)
-  (doom-reload-autoloads force-p)
-  (setq load-path doom-site-load-path)
-  (let (doom-init-p)
-    (doom-initialize))
-  (with-demoted-errors "PRIVATE CONFIG ERROR: %s"
-    (doom-initialize-modules 'force))
-  (run-hook-wrapped 'doom-reload-hook #'doom-try-run-hook)
-  (message "Finished!"))
+  (let ((doom-auto-accept yes))
+    (doom-cli-run "refresh")))

@@ -1,5 +1,8 @@
 ;;; core/autoload/debug.el -*- lexical-binding: t; -*-
 
+;;
+;;; Helpers
+
 (defun doom-template-insert (template)
   "TODO"
   (let ((file (expand-file-name (format "templates/%s" template) doom-core-dir)))
@@ -15,12 +18,14 @@ ready to be pasted in a bug report on github."
         (doom-modules (doom-modules)))
     (format
      (concat "- OS: %s (%s)\n"
+             "- Shell: %s\n"
              "- Emacs: %s (%s)\n"
-             "- Doom: %s (%s %s)\n"
+             "- Doom: %s (%s)\n"
              "- Graphic display: %s (daemon: %s)\n"
              "- System features: %s\n"
              "- Details:\n"
              "  ```elisp\n"
+             "  env bootstrapper: %s\n"
              "  elc count: %s\n"
              "  uname -a:  %s\n"
              "  modules:   %s\n"
@@ -28,23 +33,24 @@ ready to be pasted in a bug report on github."
              "  exec-path: %s\n"
              "  ```")
      system-type system-configuration
+     shell-file-name
      emacs-version (format-time-string "%b %d, %Y" emacs-build-time)
      doom-version
-     (or (vc-git--symbolic-ref "core/core.el")
-         "n/a")
-     (or (vc-git-working-revision "core/core.el")
+     (or (string-trim (shell-command-to-string "git log -1 --format=\"%D %h %ci\""))
          "n/a")
      (display-graphic-p) (daemonp)
      (bound-and-true-p system-configuration-features)
+     (cond ((file-exists-p doom-env-file) 'envvar-file)
+           ((featurep 'exec-path-from-shell) 'exec-path-from-shell))
      ;; details
      (length (doom-files-in `(,@doom-modules-dirs
                               ,doom-core-dir
                               ,doom-private-dir)
-                            :type 'files :match "\\.elc$"))
+                            :type 'files :match "\\.elc$" :sort nil))
      (if IS-WINDOWS
          "n/a"
        (with-temp-buffer
-         (unless (zerop (call-process "uname" nil t nil "-a"))
+         (unless (zerop (call-process "uname" nil t nil "-msrv"))
            (insert (format "%s" system-type)))
          (string-trim (buffer-string))))
      (or (cl-loop with cat = nil
@@ -61,8 +67,8 @@ ready to be pasted in a bug report on github."
          "n/a")
      (or (ignore-errors
            (require 'use-package)
-           (cl-loop for (name . plist) in (doom-get-packages :private t)
-                    if (use-package-plist-delete (copy-seq plist) :private)
+           (cl-loop for (name . plist) in (doom-find-packages :private t)
+                    if (use-package-plist-delete (copy-sequence plist) :modules)
                     collect (format "%s" (cons name it))
                     else
                     collect (symbol-name name)))
@@ -72,7 +78,21 @@ ready to be pasted in a bug report on github."
 
 
 ;;
-;; Commands
+;;; Commands
+
+;;;###autoload
+(defun doom/version ()
+  "Display the current version of Doom & Emacs, including the current Doom
+branch and commit."
+  (interactive)
+  (require 'vc-git)
+  (print! "Doom v%s (Emacs v%s)\nBranch: %s\nCommit: %s"
+          doom-version
+          emacs-version
+          (or (vc-git--symbolic-ref doom-core-dir)
+              "n/a")
+          (or (vc-git-working-revision doom-core-dir)
+              "n/a")))
 
 ;;;###autoload
 (defun doom/info ()
@@ -109,55 +129,59 @@ markdown and copies it to your clipboard, ready to be pasted into bug reports!"
                       (message "Your trust roots are set up properly.\n\n%s" (pp-to-string status))
                       t)))))
 
-;;;###autoload
-(defun doom/version ()
-  "Display the current version of Doom & Emacs, including the current Doom
-branch and commit."
-  (interactive)
-  (require 'vc-git)
-  (print! "Doom v%s (Emacs v%s)\nBranch: %s\nCommit: %s."
-          doom-version
-          emacs-version
-          (or (vc-git--symbolic-ref doom-core-dir)
-              "n/a")
-          (or (vc-git-working-revision doom-core-dir)
-              "n/a")))
 
-;;;###autoload
-(defun doom/copy-backtrace ()
-  "Copy the contents of the *Backtrace* window into your clipboard for easy
-pasting into a bug report or discord."
-  (interactive)
-  (if-let* ((buf (get-buffer "*Backtrace*")))
-      (with-current-buffer buf
-        (kill-new
-         (string-trim (buffer-string))))
-    (user-error "No backtrace buffer detected")))
-
-
+;;
 ;;; Vanilla sandbox
 
-(defvar doom--sandbox-init-doom-p nil)
-
-(defun doom--run-vanilla-sandbox (&optional load-doom-p)
+(defun doom--run-sandbox (&optional mode)
   (interactive)
   (let ((contents (buffer-string))
         (file (make-temp-file "doom-sandbox-")))
+    (require 'package)
     (with-temp-file file
       (insert
        (prin1-to-string
-        `(cond (,load-doom-p
-                (setq doom-private-dir "/tmp/does/not/exist"
-                      doom-modules ,doom-modules)
-                (load ,user-init-file))
-               ((setq package--init-file-ensured t
-                      package-user-dir ,package-user-dir
-                      package-archives ',package-archives
-                      user-emacs-directory ,doom-emacs-dir)
-                (package-initialize))))
+        (macroexp-progn
+         (append `((setq noninteractive nil
+                         doom-debug-mode t
+                         package--init-file-ensured t
+                         package-user-dir ,package-user-dir
+                         package-archives ',package-archives
+                         user-emacs-directory ,doom-emacs-dir
+                         doom--modules-cache nil)
+                   (with-eval-after-load 'undo-tree
+                     ;; undo-tree throws errors because `buffer-undo-tree' isn't
+                     ;; corrrectly initialized
+                     (setq-default buffer-undo-tree (make-undo-tree))))
+                 (pcase mode
+                   (`vanilla-doom+ ; Doom core + modules - private config
+                    `((setq doom-private-dir "/tmp/does/not/exist")
+                      (load-file ,user-init-file)
+                      (setq doom-modules ',doom-modules)
+                      (maphash (lambda (key plist)
+                                 (let ((doom--current-module key)
+                                       (doom--current-flags (plist-get plist :flags)))
+                                   (load! "init" (plist-get plist :path) t)))
+                               doom-modules)
+                      (maphash (lambda (key plist)
+                                 (let ((doom--current-module key)
+                                       (doom--current-flags (plist-get plist :flags)))
+                                   (load! "config" (plist-get plist :path) t)))
+                               doom-modules)
+                      (run-hook-wrapped 'doom-init-modules-hook #'doom-try-run-hook)
+                      (doom|run-all-startup-hooks)))
+                   (`vanilla-doom  ; only Doom core
+                    `((setq doom-private-dir "/tmp/does/not/exist"
+                            doom-init-modules-p t)
+                      (load-file ,user-init-file)
+                      (doom|run-all-startup-hooks)))
+                   (`vanilla       ; nothing loaded
+                    `((package-initialize)))))))
        "\n(unwind-protect (progn\n" contents "\n)\n"
        (format "(delete-file %S))" file)))
-    (let ((args (list "-Q" "-l" file)))
+    (let ((args (if (eq mode 'doom)
+                    (list "-l" file)
+                  (list "-Q" "-l" file))))
       (require 'restart-emacs)
       (condition-case e
           (cond ((display-graphic-p)
@@ -169,42 +193,62 @@ pasting into a bug report or discord."
                 ((suspend-emacs
                   (format "%s %s -nw; fg"
                           (shell-quote-argument (restart-emacs--get-emacs-binary))
-                          (string-join (mapcar #'shell-quote-argument args) " ")))))
+                          (mapconcat #'shell-quote-argument args " ")))))
         (error
          (delete-file file)
          (signal (car e) (cdr e)))))))
 
-(defun doom--run-vanilla-doom-sandbox ()
-  (interactive)
-  (doom--run-vanilla-sandbox t))
+(fset 'doom--run-vanilla-emacs (lambda! (doom--run-sandbox 'vanilla)))
+(fset 'doom--run-vanilla-doom  (lambda! (doom--run-sandbox 'vanilla-doom)))
+(fset 'doom--run-vanilla-doom+ (lambda! (doom--run-sandbox 'vanilla-doom+)))
+(fset 'doom--run-full-doom     (lambda! (doom--run-sandbox 'doom)))
+
+(defvar doom-sandbox-emacs-lisp-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-c") #'doom--run-vanilla-emacs)
+    (define-key map (kbd "C-c C-d") #'doom--run-vanilla-doom)
+    (define-key map (kbd "C-c C-p") #'doom--run-vanilla-doom+)
+    (define-key map (kbd "C-c C-f") #'doom--run-full-doom)
+    (define-key map (kbd "C-c C-k") #'kill-current-buffer)
+    map))
+
+(define-derived-mode doom-sandbox-emacs-lisp-mode emacs-lisp-mode "Sandbox Elisp"
+  "TODO")
 
 ;;;###autoload
-(defun doom/open-vanilla-sandbox ()
-  "Open an Emacs Lisp buffer destinated to run in a blank Emacs session (and
-optionally load only Doom and its modules, without your private config).
+(defun doom/sandbox ()
+  "Open the Emacs Lisp sandbox.
 
-This provides a testbed for debugging code without Doom (or your private config)
-standing in the way, and without sacrificing access to installed packages."
+This is a test bed for running Emacs Lisp in another instance of Emacs with
+varying amounts of Doom loaded, including:
+
+  a) vanilla Emacs (nothing loaded),
+  b) vanilla Doom (only Doom core),
+  c) Doom + modules - your private config or
+  c) Doom + modules + your private config (a complete Doom session)
+
+This is done without sacrificing access to installed packages. Use the sandbox
+to reproduce bugs and determine if Doom is to blame."
   (interactive)
-  (let* ((buffer-name "*doom:vanilla-sandbox*")
+  (let* ((buffer-name "*doom:sandbox*")
          (exists (get-buffer buffer-name))
          (buf (get-buffer-create buffer-name)))
     (with-current-buffer buf
-      (emacs-lisp-mode)
-      (local-set-key (kbd "C-c C-c") #'doom--run-vanilla-sandbox)
-      (local-set-key (kbd "C-c C-d") #'doom--run-vanilla-doom-sandbox)
-      (local-set-key (kbd "C-c C-k") #'kill-this-buffer)
-      (setq header-line-format "C-c C-c to run the session / C-c C-d to run it with vanilla Doom loaded / C-c C-k to abort it")
+      (doom-sandbox-emacs-lisp-mode)
       (setq-local default-directory doom-emacs-dir)
       (unless (buffer-live-p exists)
-        (doom-template-insert "VANILLA_SANDBOX"))
+        (doom-template-insert "VANILLA_SANDBOX")
+        (let ((contents (substitute-command-keys (buffer-string))))
+          (erase-buffer)
+          (insert contents "\n")))
       (goto-char (point-max)))
     (pop-to-buffer buf)))
 
 
+;;
 ;;; Reporting bugs
 
-(defun doom--open-bug-report ()
+(defun doom--report-bug ()
   "TODO"
   (interactive)
   (let ((url "https://github.com/hlissner/doom-emacs/issues/new?body="))
@@ -233,7 +277,7 @@ standing in the way, and without sacrificing access to installed packages."
         (error (signal (car e) (car e)))))))
 
 ;;;###autoload
-(defun doom/open-bug-report ()
+(defun doom/report-bug ()
   "Open a markdown buffer destinated to populate the New Issue page on Doom
 Emacs' issue tracker.
 
@@ -248,7 +292,7 @@ will be automatically appended to the result."
               (buffer-substring-no-properties
                (point-min)
                (min (point-max) 1000))))))
-        (buf (get-buffer-create "*doom:vanilla-sandbox*")))
+        (buf (get-buffer-create "*doom:sandbox*")))
     (with-current-buffer buf
       (erase-buffer)
       (condition-case _ (gfm-mode)
@@ -263,8 +307,8 @@ will be automatically appended to the result."
                (format "\n<details>\n<summary>Backtrace</summary>\n\n```\n%s\n```\n</details>\n"
                        backtrace)
              "")))
-        (local-set-key (kbd "C-c C-c") #'doom--open-bug-report)
-        (local-set-key (kbd "C-c C-k") #'kill-this-buffer)
+        (local-set-key (kbd "C-c C-c") #'doom--report-bug)
+        (local-set-key (kbd "C-c C-k") #'kill-current-buffer)
         (setq header-line-format "C-c C-c to submit / C-c C-k to close")
         ;;
         (narrow-to-region (point-min) pos)
@@ -272,6 +316,7 @@ will be automatically appended to the result."
       (pop-to-buffer buf))))
 
 
+;;
 ;;; Profiling
 
 (defvar doom--profiler nil)
@@ -320,3 +365,14 @@ If INIT-FILE is non-nil, profile that instead of USER-INIT-FILE."
 
 ;;;###autoload
 (advice-add #'esup :override #'doom/profile-emacs)
+
+;;;###autoload
+(defun doom/toggle-debug-mode (&optional arg)
+  "Toggle `debug-on-error' and `doom-debug-mode' for verbose logging."
+  (interactive (list (or current-prefix-arg 'toggle)))
+  (let ((value
+         (cond ((eq arg 'toggle) (not doom-debug-mode))
+               ((> (prefix-numeric-value arg) 0)))))
+    (setq doom-debug-mode value
+          debug-on-error value)
+    (message "Debug mode %s" (if value "on" "off"))))

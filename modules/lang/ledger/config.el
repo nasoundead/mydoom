@@ -21,12 +21,12 @@
 
 
 (def-package! flycheck-ledger
-  :when (featurep! :feature syntax-checker)
+  :when (featurep! :tools flycheck)
   :after ledger-mode)
 
 
 (def-package! evil-ledger
-  :when (featurep! :feature evil +everywhere)
+  :when (featurep! :editor evil +everywhere)
   :hook (ledger-mode . evil-ledger-mode)
   :config
   (set-evil-initial-state! 'ledger-report-mode 'normal)

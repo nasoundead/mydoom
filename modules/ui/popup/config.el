@@ -5,7 +5,7 @@
 Modifying this has no effect, unless done before ui/popup loads.")
 
 (defvar +popup-default-display-buffer-actions
-  '(display-buffer-reuse-window +popup-display-buffer-stacked-side-window)
+  '(+popup-display-buffer-stacked-side-window)
   "The functions to use to display the popup buffer.")
 
 (defvar +popup-default-alist
@@ -42,7 +42,7 @@ adjustment.")
 
 (defvar +popup-buffer-mode-map
   (let ((map (make-sparse-keymap)))
-    (when (featurep! :feature evil)
+    (when (featurep! :editor evil)
       ;; For maximum escape coverage in emacs state buffers; this only works in
       ;; GUI Emacs, in tty Emacs use C-g instead
       (define-key map [escape] #'doom/escape))
@@ -56,7 +56,6 @@ adjustment.")
   :keymap +popup-mode-map
   (cond (+popup-mode
          (add-hook 'doom-escape-hook #'+popup|close-on-escape t)
-         (add-hook 'doom-cleanup-hook #'+popup|cleanup-rules)
          (setq +popup--old-display-buffer-alist display-buffer-alist
                display-buffer-alist +popup--display-buffer-alist
                window--sides-inhibit-check t)
@@ -64,7 +63,6 @@ adjustment.")
            (push (cons prop 'writable) window-persistent-parameters)))
         (t
          (remove-hook 'doom-escape-hook #'+popup|close-on-escape)
-         (remove-hook 'doom-cleanup-hook #'+popup|cleanup-rules)
          (setq display-buffer-alist +popup--old-display-buffer-alist
                window--sides-inhibit-check nil)
          (+popup|cleanup-rules)
@@ -132,22 +130,20 @@ prevent the popup(s) from messing up the UI (or vice versa)."
     '(("^\\*"  :slot 1 :vslot -1 :select t)
       ("^ \\*" :slot 1 :vslot -1 :size +popup-shrink-to-fit)))
   (when (featurep! +defaults)
-    '(("^\\*bin/doom\\*$"
-       :vslot 9999 :size 0.75 :quit 'current :select t :ttl 0)
-      ("^\\*Completions"
+    '(("^\\*Completions"
        :slot -1 :vslot -2 :ttl 0)
-      ("^\\*Compil\\(?:ation\\|e-Log\\)"
-       :vslot -2 :size 0.3 :ttl 0 :quit t)
-      ("^\\*\\(?:scratch\\|Messages\\)"
-       :autosave t :ttl nil)
+      ("^\\*\\(?:Compil\\(?:ation\\|e-Log\\)\\|Messages\\)"
+       :vslot -2 :size 0.3  :autosave t :quit t :ttl nil)
+      ("^\\*\\(?:doom \\|Pp E\\)"  ; transient buffers (no interaction required)
+       :vslot -3 :size +popup-shrink-to-fit :autosave t :select ignore :quit t :ttl 0)
+      ("^\\*doom:"  ; editing buffers (interaction required)
+       :vslot -4 :size 0.35 :autosave t :select t :modeline t :quit nil :ttl t)
+      ("^\\*doom:\\(?:v?term\\|eshell\\)-popup"  ; editing buffers (interaction required)
+       :vslot -5 :size 0.35 :select t :modeline t :quit nil :ttl nil)
       ("^\\*Man "
-       :size 0.45 :vslot -3 :ttl 0 :quit t :select t)
-      ("^\\*doom \\(?:term\\|eshell\\)"
-       :size 0.25 :vslot -4 :select t :quit nil :ttl 0)
-      ("^\\*doom:"
-       :vslot -5 :size 0.35 :size bottom :autosave t :select t :modeline t :quit nil)
-      ("^\\*\\(?:\\(?:Pp E\\|doom e\\)val\\)"
-       :size +popup-shrink-to-fit :ttl 0 :select ignore)
+       :vslot -6 :size 0.45 :select t :quit t :ttl 0)
+      ("^\\*Calc"
+       :vslot -7 :side bottom :size 0.4 :select t :quit nil :ttl 0)
       ("^\\*Customize"
        :slot 2 :side right :select t :quit t)
       ("^ \\*undo-tree\\*"
@@ -155,13 +151,13 @@ prevent the popup(s) from messing up the UI (or vice versa)."
       ;; `help-mode', `helpful-mode'
       ("^\\*[Hh]elp"
        :slot 2 :vslot -2 :size 0.35 :select t)
-      ;; `eww' (and used by dash docsets)
-      ("^\\*eww\\*"
+      ("^\\*eww\\*"  ; `eww' (and used by dash docsets)
        :vslot -11 :size 0.35 :select t)
-      ;; `Info-mode'
-      ("^\\*info\\*$"
+      ("^\\*info\\*$"  ; `Info-mode'
        :slot 2 :vslot 2 :size 0.45 :select t)))
-  '(("^\\*Backtrace" :vslot 99 :size 0.4 :quit nil)))
+  '(("^\\*Backtrace" :vslot 99 :size 0.4 :quit nil)
+    ("^\\*CPU-Profiler-Report "    :side bottom :vslot 100 :slot 1 :height 0.4 :width 0.5 :quit nil)
+    ("^\\*Memory-Profiler-Report " :side bottom :vslot 100 :slot 2 :height 0.4 :width 0.5 :quit nil)))
 
 (add-hook 'doom-init-ui-hook #'+popup-mode :append)
 

@@ -12,9 +12,11 @@
   (set-lookup-handlers! 'php-mode :documentation #'php-search-documentation)
   (set-formatter! 'php-mode #'php-cs-fixer-fix)
 
-  ;; `+php-company-backend' uses `company-phpactor', `php-extras-company' or
-  ;; `company-dabbrev-code', in that order.
-  (set-company-backend! 'php-mode '+php-company-backend 'company-dabbrev-code)
+  (if (featurep! +lsp)
+      (add-hook 'php-mode-local-vars-hook #'lsp!)
+    ;; `+php-company-backend' uses `company-phpactor', `php-extras-company' or
+    ;; `company-dabbrev-code', in that order.
+    (set-company-backend! 'php-mode '+php-company-backend 'company-dabbrev-code))
 
   ;; Use the smallest `sp-max-pair-length' for optimum `smartparens' performance
   (setq-hook! 'php-mode-hook sp-max-pair-length 5)
@@ -32,26 +34,11 @@
 
 
 (def-package! phpactor
+  :unless (featurep! +lsp)
   :after php-mode
   :config
   (set-lookup-handlers! 'php-mode
     :definition #'phpactor-goto-definition)
-
-  ;; TODO PR these for phpactor.el?
-  ;; company-phpactor breaks company if executable doesn't exist
-  (defun +php*company-phpactor-fail-silently (orig-fn &rest args)
-    (when (phpactor-find-executable)
-      (apply orig-fn args)))
-  (advice-add #'company-phpactor :around #'+php*company-phpactor-fail-silently)
-
-  ;; `phpactor-get-working-dir' throws stringp errors if not in a project.
-  (defun +php*project-root (&rest _)
-    (setq phpactor-working-dir
-          (or phpactor-working-dir
-              (php-project-get-root-dir)
-              (doom-project-root)
-              default-directory)))
-  (advice-add #'phpactor-get-working-dir :before #'+php*project-root)
 
   (map! :localleader
         :map php-mode-map
@@ -83,6 +70,10 @@
   :config
   (setq php-extras-eldoc-functions-file
         (concat doom-etc-dir "php-extras-eldoc-functions"))
+  ;; Silence warning if `php-extras-eldoc-functions-file' hasn't finished
+  ;; generating yet.
+  (defun php-extras-load-eldoc ()
+    (require 'php-extras-eldoc-functions php-extras-eldoc-functions-file t))
   ;; Make expensive php-extras generation async
   (unless (file-exists-p (concat php-extras-eldoc-functions-file ".el"))
     (message "Generating PHP eldoc files...")

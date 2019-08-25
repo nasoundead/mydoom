@@ -1,5 +1,7 @@
 ;;; ui/popup/autoload/popup.el -*- lexical-binding: t; -*-
 
+(defvar +popup--internal nil)
+
 (defun +popup--remember (windows)
   "Remember WINDOWS (a list of windows) for later restoration."
   (cl-assert (cl-every #'windowp windows) t)
@@ -23,7 +25,7 @@ the buffer is visible, then set another timer and try again later."
             ((with-demoted-errors "Error killing transient buffer: %s"
                (with-current-buffer buffer
                  (let (confirm-kill-processes)
-                   (when-let* ((process (get-buffer-process buffer)))
+                   (when-let (process (get-buffer-process buffer))
                      (kill-process process))
                    (let (kill-buffer-hook kill-buffer-query-functions)
                      (kill-buffer buffer))))))))))
@@ -48,7 +50,7 @@ the buffer is visible, then set another timer and try again later."
                   (funcall autosave buffer))))
          (with-current-buffer buffer (save-buffer)))
     (let ((ignore-window-parameters t))
-      (if-let* ((wconf (window-parameter window 'saved-wconf)))
+      (if-let (wconf (window-parameter window 'saved-wconf))
           (set-window-configuration wconf)
         (delete-window window)))
     (unless (window-live-p window)
@@ -73,7 +75,7 @@ the buffer is visible, then set another timer and try again later."
 
 (defun +popup--delete-other-windows (window)
   "Fixes `delete-other-windows' when used from a popup window."
-  (when-let* ((window (ignore-errors (+popup/raise window))))
+  (when-let (window (ignore-errors (+popup/raise window)))
     (let ((ignore-window-parameters t))
       (delete-other-windows window)))
   nil)
@@ -102,6 +104,17 @@ the buffer is visible, then set another timer and try again later."
             parameters)
       alist)))
 
+(defun +popup--split-window (window size side)
+  "Ensure a non-dedicated/popup window is selected when splitting a window."
+  (unless +popup--internal
+    (cl-loop for win
+             in (cons (or window (selected-window))
+                      (window-list nil 0 window))
+             unless (+popup-window-p win)
+             return (setq window win)))
+  (let ((ignore-window-parameters t))
+    (split-window window size side)))
+
 ;;;###autoload
 (defun +popup--init (window &optional alist)
   "Initializes a popup window. Run any time a popup is opened. It sets the
@@ -115,6 +128,7 @@ and enables `+popup-buffer-mode'."
       (dolist (param (cdr (assq 'window-parameters alist)))
         (set-window-parameter window (car param) (cdr param))))
     (set-window-parameter window 'popup t)
+    (set-window-parameter window 'split-window #'+popup--split-window)
     (set-window-parameter window 'delete-window #'+popup--delete-window)
     (set-window-parameter window 'delete-other-windows #'+popup--delete-other-windows)
     (set-window-dedicated-p window 'popup)
@@ -146,7 +160,8 @@ and enables `+popup-buffer-mode'."
     (let ((window (or window (selected-window))))
       (and (windowp window)
            (window-live-p window)
-           (window-parameter window 'popup)
+           (or (window-parameter window 'popup)
+               (window-parameter window 'no-other-window))
            window))))
 
 ;;;###autoload
@@ -157,16 +172,23 @@ and enables `+popup-buffer-mode'."
          (alist (+popup--normalize-alist alist))
          (actions (or (cdr (assq 'actions alist))
                       +popup-default-display-buffer-actions)))
-    (when-let* ((popup (cl-loop for func in actions
-                                if (funcall func buffer alist)
-                                return it)))
-      (+popup--init popup alist)
-      (unless +popup--inhibit-select
-        (let ((select (+popup-parameter 'select popup)))
-          (if (functionp select)
-              (funcall select popup origin)
-            (select-window (if select popup origin)))))
-      popup)))
+    (or (let* ((alist (remove (assq 'window-width alist) alist))
+               (alist (remove (assq 'window-height alist) alist))
+               (window (display-buffer-reuse-window buffer alist)))
+          (when window
+            (unless +popup--inhibit-select
+              (select-window window))
+            window))
+        (when-let (popup (cl-loop for func in actions
+                                  if (funcall func buffer alist)
+                                  return it))
+          (+popup--init popup alist)
+          (unless +popup--inhibit-select
+            (let ((select (+popup-parameter 'select popup)))
+              (if (functionp select)
+                  (funcall select popup origin)
+                (select-window (if select popup origin)))))
+          popup))))
 
 ;;;###autoload
 (defun +popup-parameter (parameter &optional window)
@@ -280,7 +302,7 @@ Any non-nil value besides the above will be used as the raw value for
 ;;;###autoload
 (defun +popup|kill-buffer-hook ()
   "TODO"
-  (when-let* ((window (get-buffer-window)))
+  (when-let (window (get-buffer-window))
     (when (+popup-window-p window)
       (let ((+popup--inhibit-transient t))
         (+popup--delete-window window)))))
@@ -308,15 +330,14 @@ Any non-nil value besides the above will be used as the raw value for
 (defun +popup/other ()
   "Cycle through popup windows, like `other-window'. Ignores regular windows."
   (interactive)
-  (let ((popups (+popup-windows))
-        (window (selected-window)))
-    (unless popups
-      (user-error "No popups are open"))
-    (select-window (if (+popup-window-p)
-                       (or (car-safe (cdr (memq window popups)))
-                           (car (delq window popups))
-                           (car popups))
-                     (car popups)))))
+  (if-let (popups (+popup-windows))
+      (select-window (if (+popup-window-p)
+                         (let ((window (selected-window)))
+                           (or (car-safe (cdr (memq window popups)))
+                               (car (delq window popups))
+                               (car popups)))
+                       (car popups)))
+    (user-error "No popups are open")))
 
 ;;;###autoload
 (defun +popup/close (&optional window force-p)
@@ -385,8 +406,8 @@ the message buffer in a popup window."
   (unless (+popup-window-p window)
     (user-error "Cannot raise a non-popup window"))
   (let ((buffer (current-buffer))
+        (+popup--inhibit-transient t)
         +popup--remember-last)
-    (set-window-parameter window 'ttl nil)
     (+popup/close window 'force)
     (display-buffer-pop-up-window buffer nil)))
 
@@ -442,7 +463,7 @@ Accepts the same arguments as `display-buffer-in-side-window'. You must set
          (slot  (or (cdr (assq 'slot alist))  0))
          (vslot (or (cdr (assq 'vslot alist)) 0))
          (left-or-right (memq side '(left right)))
-         (dedicated (or display-buffer-mark-dedicated 'popup)))
+         (display-buffer-mark-dedicated (or display-buffer-mark-dedicated 'popup)))
 
     (cond ((not (memq side '(top bottom left right)))
            (error "Invalid side %s specified" side))
@@ -482,7 +503,7 @@ Accepts the same arguments as `display-buffer-in-side-window'. You must set
             ((not windows)
              (cl-letf (((symbol-function 'window--make-major-side-window-next-to)
                         (lambda (_side) (frame-root-window (selected-frame)))))
-               (when-let* ((window (window--make-major-side-window buffer side slot alist)))
+               (when-let (window (window--make-major-side-window buffer side slot alist))
                  (set-window-parameter window 'window-vslot vslot)
                  (add-to-list 'window-persistent-parameters '(window-vslot . writable))
                  window)))
@@ -530,17 +551,19 @@ Accepts the same arguments as `display-buffer-in-side-window'. You must set
                       (with-current-buffer buffer
                         (setq window--sides-shown t))
                       (window--display-buffer
-                       buffer this-window 'reuse alist dedicated))
+                       buffer this-window 'reuse alist))
                  (and (or (not max-slots) (< slots max-slots))
                       (or (and next-window
                                ;; Make new window before `next-window'.
                                (let ((next-side (if left-or-right 'above 'left))
+                                     (+popup--internal t)
                                      (window-combination-resize 'side))
                                  (setq window
                                        (ignore-errors (split-window next-window nil next-side)))))
                           (and prev-window
                                ;; Make new window after `prev-window'.
                                (let ((prev-side (if left-or-right 'below 'right))
+                                     (+popup--internal t)
                                      (window-combination-resize 'side))
                                  (setq window
                                        (ignore-errors (split-window prev-window nil prev-side))))))
@@ -548,7 +571,7 @@ Accepts the same arguments as `display-buffer-in-side-window'. You must set
                       (with-current-buffer buffer
                         (setq window--sides-shown t))
                       (window--display-buffer
-                       buffer window 'window alist dedicated))
+                       buffer window 'window alist))
                  (and best-window
                       ;; Reuse `best-window'.
                       (progn
@@ -557,11 +580,22 @@ Accepts the same arguments as `display-buffer-in-side-window'. You must set
                         (with-current-buffer buffer
                           (setq window--sides-shown t))
                         (window--display-buffer
-                         buffer best-window 'reuse alist dedicated)))))))))
+                         buffer best-window 'reuse alist)))))))))
 
 
 ;;
 ;; Emacs backwards compatibility
+
+(unless EMACS27+
+  (defun +popup*set-window-dedicated (window)
+    "Ensure `window--dispaly-buffer' respects `display-buffer-mark-dedicated'.
+
+This was not so until recent Emacs 27 builds, where it causes breaking errors.
+This advice ensures backwards compatibility for Emacs <= 26 users."
+    (when (and (windowp window) display-buffer-mark-dedicated)
+      (set-window-dedicated-p window display-buffer-mark-dedicated))
+    window)
+  (advice-add #'window--display-buffer :filter-return #'+popup*set-window-dedicated))
 
 (unless EMACS26+
   (defvar window-sides-reversed nil)

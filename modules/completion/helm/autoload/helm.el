@@ -24,8 +24,8 @@
   "A version of `helm-buffers-list' with its buffer list restricted to the
 current workspace."
   (interactive)
-  (unless (featurep! :feature workspaces)
-    (user-error "This command requires the :feature workspaces module"))
+  (unless (featurep! :ui workspaces)
+    (user-error "This command requires the :ui workspaces module"))
   (with-no-warnings
     (with-persp-buffer-list nil (helm-buffers-list))))
 
@@ -34,8 +34,8 @@ current workspace."
   "A version of `helm-mini' with its buffer list restricted to the current
 workspace."
   (interactive)
-  (unless (featurep! :feature workspaces)
-    (user-error "This command requires the :feature workspaces module"))
+  (unless (featurep! :ui workspaces)
+    (user-error "This command requires the :ui workspaces module"))
   (with-no-warnings
     (with-persp-buffer-list nil (helm-mini))))
 
@@ -162,9 +162,10 @@ order.
                                 (string-join (delq nil (cdr command)) " ")
                                 (abbreviate-file-name directory))
                   helm-source-do-ag)
-    (cl-letf ((+helm-global-prompt prompt)
-              ((symbol-function 'helm-do-ag--helm)
+    (helm-attrset '+helm-command command helm-source-do-ag)
+    (cl-letf (((symbol-function 'helm-do-ag--helm)
                (lambda () (helm :sources '(helm-source-do-ag)
+                           :prompt prompt
                            :buffer "*helm-ag*"
                            :keymap helm-do-ag-map
                            :input query
@@ -177,57 +178,68 @@ order.
            return (intern (format format tool))))
 
 ;;;###autoload
-(defun +helm/project-search (&optional all-files-p)
+(defun +helm/project-search (&optional arg initial-query directory)
   "Performs a project search from the project root.
 
 Uses the first available search backend from `+helm-project-search-engines'. If
-ALL-FILES-P (universal argument), include all files, even hidden or compressed
-ones, in the search."
+ARG (universal argument), include all files, even hidden or compressed ones, in
+the search."
   (interactive "P")
   (funcall (or (+helm--get-command "+helm/%s")
                #'+helm/grep)
-           (or all-files-p current-prefix-arg)))
+           arg
+           initial-query
+           directory))
 
 ;;;###autoload
-(defun +helm/project-search-from-cwd (&optional all-files-p)
+(defun +helm/project-search-from-cwd (&optional arg initial-query)
   "Performs a project search recursively from the current directory.
 
 Uses the first available search backend from `+helm-project-search-engines'. If
-ALL-FILES-P (universal argument), include all files, even hidden or compressed
-ones."
+ARG (universal argument), include all files, even hidden or compressed ones."
   (interactive "P")
   (funcall (or (+helm--get-command "+helm/%s-from-cwd")
                #'+helm/grep-from-cwd)
-           (or all-files-p current-prefix-arg)))
+           arg
+           initial-query))
 
 
-;; Relative to project root
-;;;###autoload (autoload '+helm/rg "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/rg-from-cwd "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/ag "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/ag-from-cwd "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/pt "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/pt-from-cwd "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/grep "completion/helm/autoload/helm")
-;;;###autoload (autoload '+helm/grep-from-cwd "completion/helm/autoload/helm")
+;;;###autoload (autoload '+helm/rg "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/rg-from-cwd "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/ag "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/ag-from-cwd "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/pt "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/pt-from-cwd "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/grep "completion/helm/autoload/helm" nil t)
+;;;###autoload (autoload '+helm/grep-from-cwd "completion/helm/autoload/helm" nil t)
 
 (dolist (engine `(,@(cl-remove-duplicates +helm-project-search-engines :from-end t) grep))
   (defalias (intern (format "+helm/%s" engine))
-    (lambda (all-files-p &optional query directory)
+    (lambda (arg &optional query directory)
       (interactive "P")
-      (+helm-file-search engine :query query :in directory :all-files all-files-p))
+      (+helm-file-search engine
+        :query query
+        :in directory
+        :all-files (and (not (null arg))
+                        (listp arg))))
     (format "Perform a project file search using %s.
 
 QUERY is a regexp. If omitted, the current selection is used. If no selection is
 active, the last known search is used.
 
+ARG is the universal argument. If a number is passed through it, e.g. C-u 3, then
+
 If ALL-FILES-P, search compressed and hidden files as well."
             engine))
 
   (defalias (intern (format "+helm/%s-from-cwd" engine))
-    (lambda (all-files-p &optional query)
+    (lambda (arg &optional query)
       (interactive "P")
-      (+helm-file-search engine :query query :in default-directory :all-files all-files-p))
+      (+helm-file-search engine
+        :query query
+        :in default-directory
+        :all-files (and (not (null arg))
+                        (listp arg))))
     (format "Perform a project file search from the current directory using %s.
 
 QUERY is a regexp. If omitted, the current selection is used. If no selection is

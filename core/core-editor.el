@@ -21,7 +21,7 @@ successfully sets indent_style/indent_size.")
 detected.")
 
 (setq-default
- large-file-warning-threshold 30000000
+ large-file-warning-threshold 15000000
  vc-follow-symlinks t
  ;; Save clipboard contents into kill-ring before replacing them
  save-interprogram-paste-before-kill t
@@ -39,6 +39,8 @@ detected.")
  scroll-conservatively 1001
  scroll-margin 0
  scroll-preserve-screen-position t
+ mouse-wheel-scroll-amount '(5 ((shift) . 2))
+ mouse-wheel-progressive-speed nil ; don't accelerate scrolling
  ;; Whitespace (see `editorconfig')
  indent-tabs-mode nil
  require-final-newline t
@@ -52,48 +54,95 @@ detected.")
 ;; Remove hscroll-margin in shells, otherwise it causes jumpiness
 (setq-hook! '(eshell-mode-hook term-mode-hook) hscroll-margin 0)
 
-(defun doom|check-large-file ()
-  "Check if the buffer's file is large (see `doom-large-file-size'). If so, ask
-for confirmation to open it literally (read-only, disabled undo and in
-fundamental-mode) for performance sake."
-  (when (and (not (memq major-mode doom-large-file-modes-list))
-             auto-mode-alist
-             (get-buffer-window))
-    (when-let* ((size (nth 7 (file-attributes buffer-file-name))))
-      (when (and (> size (* 1024 1024 doom-large-file-size))
-                 (y-or-n-p
-                  (format (concat "%s is a large file, open literally to "
-                                  "avoid performance issues?")
-                          (file-relative-name buffer-file-name))))
-        (setq buffer-read-only t)
-        (buffer-disable-undo)
-        (fundamental-mode)))))
-(add-hook 'find-file-hook #'doom|check-large-file)
+(defun doom*optimize-literal-mode-for-large-files (buffer)
+  (with-current-buffer buffer
+    (when find-file-literally
+      (setq buffer-read-only t)
+      (buffer-disable-undo))
+    buffer))
+(advice-add #'find-file-noselect-1 :filter-return #'doom*optimize-literal-mode-for-large-files)
 
 
 ;;
-;; Built-in plugins
+;;; Extra file extensions to support
 
 (push '("/LICENSE\\'" . text-mode) auto-mode-alist)
 
-(electric-indent-mode -1) ; enabled by default in Emacs 25+. No thanks.
 
-(def-package! server
-  :when (display-graphic-p)
-  :defer 1
-  :after-call (pre-command-hook after-find-file)
-  :config
-  (when-let* ((name (getenv "EMACS_SERVER_NAME")))
-    (setq server-name name))
-  (unless (server-running-p)
-    (server-start)))
+;;
+;;; Built-in plugins
 
 (def-package! autorevert
-  ;; revert buffers for changed files
-  :after-call after-find-file
+  ;; revert buffers when their files/state have changed
+  :hook (focus-in . doom|auto-revert-buffers)
+  :hook (after-save . doom|auto-revert-buffers)
+  :hook (doom-switch-buffer . doom|auto-revert-buffer)
+  :hook (doom-switch-window . doom|auto-revert-buffer)
   :config
-  (setq auto-revert-verbose nil)
-  (global-auto-revert-mode +1))
+  (setq auto-revert-verbose t ; let us know when it happens
+        auto-revert-use-notify nil
+        auto-revert-stop-on-user-input nil)
+
+  ;; Instead of using `auto-revert-mode' or `global-auto-revert-mode', we employ
+  ;; lazy auto reverting on `focus-in-hook' and `doom-switch-buffer-hook'.
+  ;;
+  ;; This is because autorevert abuses the heck out of inotify handles which can
+  ;; grind Emacs to a halt if you do expensive IO (outside of Emacs) on the
+  ;; files you have open (like compression). We only really need revert changes
+  ;; when we switch to a buffer or when we focus the Emacs frame.
+  (defun doom|auto-revert-buffers ()
+    "Auto revert's stale buffers (that are visible)."
+    (unless auto-revert-mode
+      (dolist (buf (doom-visible-buffers))
+        (with-current-buffer buf
+          (auto-revert-handler)))))
+
+  (defun doom|auto-revert-buffer ()
+    "Auto revert current buffer, if necessary."
+    (unless auto-revert-mode
+      (auto-revert-handler))))
+
+(def-package! recentf
+  ;; Keep track of recently opened files
+  :defer-incrementally (easymenu tree-widget timer)
+  :after-call after-find-file
+  :commands recentf-open-files
+  :config
+  (setq recentf-save-file (concat doom-cache-dir "recentf")
+        recentf-auto-cleanup 'never
+        recentf-max-menu-items 0
+        recentf-max-saved-items 200
+        recentf-exclude
+        (list "\\.\\(?:gz\\|gif\\|svg\\|png\\|jpe?g\\)$" "^/tmp/" "^/ssh:"
+              "\\.?ido\\.last$" "\\.revive$" "/TAGS$" "^/var/folders/.+$"
+              ;; ignore private DOOM temp files
+              (lambda (path)
+                (ignore-errors (file-in-directory-p path doom-local-dir)))))
+
+  (defun doom--recent-file-truename (file)
+    (if (or (file-remote-p file nil t)
+            (not (file-remote-p file)))
+        (file-truename file)
+      file))
+  (setq recentf-filename-handlers '(doom--recent-file-truename abbreviate-file-name))
+
+  (defun doom|recentf-touch-buffer ()
+    "Bump file in recent file list when it is switched or written to."
+    (when buffer-file-name
+      (recentf-add-file buffer-file-name))
+    ;; Return nil for `write-file-functions'
+    nil)
+  (add-hook 'doom-switch-window-hook #'doom|recentf-touch-buffer)
+  (add-hook 'write-file-functions #'doom|recentf-touch-buffer)
+
+  (defun doom|recentf-add-dired-directory ()
+    "Add dired directory to recentf file list."
+    (recentf-add-file default-directory))
+  (add-hook 'dired-mode-hook #'doom|recentf-add-dired-directory)
+
+  (unless noninteractive
+    (add-hook 'kill-emacs-hook #'recentf-cleanup)
+    (quiet! (recentf-mode +1))))
 
 (def-package! savehist
   ;; persist variables across sessions
@@ -119,7 +168,9 @@ savehist file."
   ;; persistent point location in buffers
   :after-call (after-find-file dired-initial-position-hook)
   :config
-  (setq save-place-file (concat doom-cache-dir "saveplace"))
+  (setq save-place-file (concat doom-cache-dir "saveplace")
+        save-place-forget-unreadable-files t
+        save-place-limit 200)
   (defun doom*recenter-on-load-saveplace (&rest _)
     "Recenter on cursor when loading a saved place."
     (if buffer-file-name (ignore-errors (recenter))))
@@ -127,70 +178,65 @@ savehist file."
               :after-while #'doom*recenter-on-load-saveplace)
   (save-place-mode +1))
 
-(def-package! recentf
-  ;; Keep track of recently opened files
-  :defer-incrementally (easymenu tree-widget timer)
-  :after-call after-find-file
-  :commands recentf-open-files
+(def-package! server
+  :when (display-graphic-p)
+  :after-call (pre-command-hook after-find-file focus-out-hook)
+  :init
+  (when-let (name (getenv "EMACS_SERVER_NAME"))
+    (setq server-name name))
   :config
-  (setq recentf-save-file (concat doom-cache-dir "recentf")
-        recentf-auto-cleanup 'never
-        recentf-max-menu-items 0
-        recentf-max-saved-items 300
-        recentf-filename-handlers '(file-truename abbreviate-file-name)
-        recentf-exclude
-        (list #'file-remote-p "\\.\\(?:gz\\|gif\\|svg\\|png\\|jpe?g\\)$"
-              "^/tmp/" "^/ssh:" "\\.?ido\\.last$" "\\.revive$" "/TAGS$"
-              "^/var/folders/.+$"
-              ;; ignore private DOOM temp files (but not all of them)
-              (lambda (file) (file-in-directory-p file doom-local-dir))))
-  (unless noninteractive
-    (add-hook 'kill-emacs-hook #'recentf-cleanup)
-    (quiet! (recentf-mode +1))))
+  (unless (server-running-p)
+    (server-start)))
 
 
 ;;
-;; Packages
+;;; Packages
 
-(def-package! smartparens
-  ;; Auto-close delimiters and blocks as you type. It's more powerful than that,
-  ;; but that is all Doom uses it for.
-  :after-call (doom-exit-buffer-hook after-find-file)
-  :commands (sp-pair sp-local-pair sp-with-modes)
+(def-package! better-jumper
+  :after-call (pre-command-hook)
+  :init
+  (global-set-key [remap evil-jump-forward]  #'better-jumper-jump-forward)
+  (global-set-key [remap evil-jump-backward] #'better-jumper-jump-backward)
+  (global-set-key [remap xref-pop-marker-stack] #'better-jumper-jump-backward)
   :config
-  (require 'smartparens-config)
-  (setq sp-highlight-pair-overlay nil
-        sp-highlight-wrap-overlay nil
-        sp-highlight-wrap-tag-overlay nil
-        sp-show-pair-from-inside t
-        sp-cancel-autoskip-on-backward-movement nil
-        sp-show-pair-delay 0.1
-        sp-max-pair-length 4
-        sp-max-prefix-length 50
-        sp-escape-quotes-after-insert nil)  ; not smart enough
+  (better-jumper-mode +1)
+  (add-hook 'better-jumper-post-jump-hook #'recenter)
 
-  ;; Smartparens' navigation feature is neat, but does not justify how expensive
-  ;; it is. It's also less useful for evil users. This may need to be
-  ;; reactivated for non-evil users though. Needs more testing!
-  (defun doom|disable-smartparens-navigate-skip-match ()
-    (setq sp-navigate-skip-match nil
-          sp-navigate-consider-sgml-tags nil))
-  (add-hook 'after-change-major-mode-hook #'doom|disable-smartparens-navigate-skip-match)
+  (defun doom*set-jump (orig-fn &rest args)
+    "Set a jump point and ensure ORIG-FN doesn't set any new jump points."
+    (better-jumper-set-jump (if (markerp (car args)) (car args)))
+    (let ((evil--jumps-jumping t)
+          (better-jumper--jumping t))
+      (apply orig-fn args)))
 
-  ;; autopairing in `eval-expression' and `evil-ex'
-  (defun doom|init-smartparens-in-eval-expression ()
-    "Enable `smartparens-mode' in the minibuffer, during `eval-expression' or
-`evil-ex'."
-    (when (memq this-command '(eval-expression evil-ex))
-      (smartparens-mode)))
-  (add-hook 'minibuffer-setup-hook #'doom|init-smartparens-in-eval-expression)
-  (sp-local-pair 'minibuffer-inactive-mode "'" nil :actions nil)
+  (defun doom*set-jump-maybe (orig-fn &rest args)
+    "Set a jump point if ORIG-FN returns non-nil."
+    (let ((origin (point-marker))
+          (result
+           (let* ((evil--jumps-jumping t)
+                  (better-jumper--jumping t))
+             (apply orig-fn args))))
+      (unless result
+        (with-current-buffer (marker-buffer origin)
+          (better-jumper-set-jump
+           (if (markerp (car args))
+               (car args)
+             origin))))
+      result))
 
-  ;; smartparens breaks evil-mode's replace state
-  (add-hook 'evil-replace-state-entry-hook #'turn-off-smartparens-mode)
-  (add-hook 'evil-replace-state-exit-hook  #'turn-on-smartparens-mode)
+  (defun doom|set-jump ()
+    "Run `better-jumper-set-jump' but return nil, for short-circuiting hooks."
+    (better-jumper-set-jump)
+    nil))
 
-  (smartparens-global-mode +1))
+
+(def-package! command-log-mode
+  :commands global-command-log-mode
+  :config
+  (setq command-log-mode-auto-show t
+        command-log-mode-open-log-turns-on-mode nil
+        command-log-mode-is-global t
+        command-log-mode-window-size 50))
 
 
 (def-package! dtrt-indent
@@ -203,11 +249,14 @@ savehist file."
                 doom-inhibit-indent-detection
                 (member (substring (buffer-name) 0 1) '(" " "*"))
                 (memq major-mode doom-detect-indentation-excluded-modes))
-      (dtrt-indent-mode +1)))
+      ;; Don't display messages in the echo area, but still log them
+      (let ((inhibit-message (not doom-debug-mode)))
+        (dtrt-indent-mode +1))))
   (add-hook! '(change-major-mode-after-body-hook read-only-mode-hook)
     #'doom|detect-indentation)
   :config
-  (setq dtrt-indent-verbosity (if doom-debug-mode 2 0))
+  (setq dtrt-indent-run-after-smie t)
+
   ;; always keep tab-width up-to-date
   (push '(t tab-width) dtrt-indent-hook-generic-mapping-list)
 
@@ -228,29 +277,87 @@ savehist file."
   (advice-add #'dtrt-indent-mode :around #'doom*fix-broken-smie-modes))
 
 
+(def-package! helpful
+  ;; a better *help* buffer
+  :commands helpful--read-symbol
+  :init
+  (define-key!
+    [remap describe-function] #'helpful-callable
+    [remap describe-command]  #'helpful-command
+    [remap describe-variable] #'helpful-variable
+    [remap describe-key]      #'helpful-key
+    [remap describe-symbol]   #'doom/describe-symbol)
+
+  (after! apropos
+    ;; patch apropos buttons to call helpful instead of help
+    (dolist (fun-bt '(apropos-function apropos-macro apropos-command))
+      (button-type-put
+       fun-bt 'action
+       (lambda (button)
+         (helpful-callable (button-get button 'apropos-symbol)))))
+    (dolist (var-bt '(apropos-variable apropos-user-option))
+      (button-type-put
+       var-bt 'action
+       (lambda (button)
+         (helpful-variable (button-get button 'apropos-symbol)))))))
+
+
+;;;###package imenu
+(add-hook 'imenu-after-jump-hook #'recenter)
+
+
+(def-package! smartparens
+  ;; Auto-close delimiters and blocks as you type. It's more powerful than that,
+  ;; but that is all Doom uses it for.
+  :after-call (doom-switch-buffer-hook after-find-file)
+  :commands (sp-pair sp-local-pair sp-with-modes sp-point-in-comment sp-point-in-string)
+  :config
+  (require 'smartparens-config)
+  (setq sp-highlight-pair-overlay nil
+        sp-highlight-wrap-overlay nil
+        sp-highlight-wrap-tag-overlay nil
+        sp-show-pair-from-inside t
+        sp-cancel-autoskip-on-backward-movement nil
+        sp-show-pair-delay 0.1
+        sp-max-pair-length 4
+        sp-max-prefix-length 50
+        sp-escape-quotes-after-insert nil)  ; not smart enough
+
+  ;; autopairing in `eval-expression' and `evil-ex'
+  (defun doom|init-smartparens-in-eval-expression ()
+    "Enable `smartparens-mode' in the minibuffer, during `eval-expression' or
+`evil-ex'."
+    (when (memq this-command '(eval-expression evil-ex))
+      (smartparens-mode)))
+  (add-hook 'minibuffer-setup-hook #'doom|init-smartparens-in-eval-expression)
+
+  (sp-local-pair 'minibuffer-inactive-mode "'" nil :actions nil)
+  (sp-local-pair 'minibuffer-inactive-mode "`" nil :actions nil)
+
+  ;; smartparens breaks evil-mode's replace state
+  (add-hook 'evil-replace-state-entry-hook #'turn-off-smartparens-mode)
+  (add-hook 'evil-replace-state-exit-hook  #'turn-on-smartparens-mode)
+
+  (smartparens-global-mode +1))
+
+
 (def-package! undo-tree
   ;; Branching & persistent undo
-  :after-call (doom-exit-buffer-hook after-find-file)
+  :after-call (doom-switch-buffer-hook after-find-file)
   :config
-  (setq undo-tree-auto-save-history t
+  (setq undo-tree-auto-save-history nil ; disable because unstable
         ;; undo-in-region is known to cause undo history corruption, which can
         ;; be very destructive! Disabling it deters the error, but does not fix
         ;; it entirely!
         undo-tree-enable-undo-in-region nil
         undo-tree-history-directory-alist
         `(("." . ,(concat doom-cache-dir "undo-tree-hist/"))))
-  (global-undo-tree-mode +1)
 
-  (defun doom*shut-up-undo-tree (&rest _) (message ""))
-  (advice-add #'undo-tree-load-history :after #'doom*shut-up-undo-tree)
-
-  ;; compress undo history with xz
-  (defun doom*undo-tree-make-history-save-file-name (file)
-    (cond ((executable-find "zstd") (concat file ".zst"))
-          ((executable-find "gzip") (concat file ".gz"))
-          (file)))
-  (advice-add #'undo-tree-make-history-save-file-name :filter-return
-              #'doom*undo-tree-make-history-save-file-name)
+  (when (executable-find "zstd")
+    (defun doom*undo-tree-make-history-save-file-name (file)
+      (concat file ".zst"))
+    (advice-add #'undo-tree-make-history-save-file-name :filter-return
+                #'doom*undo-tree-make-history-save-file-name))
 
   (defun doom*strip-text-properties-from-undo-history (&rest _)
     (dolist (item buffer-undo-list)
@@ -259,41 +366,7 @@ savehist file."
            (setcar item (substring-no-properties (car item))))))
   (advice-add #'undo-list-transfer-to-tree :before #'doom*strip-text-properties-from-undo-history)
 
-  (defun doom*compress-undo-tree-history (orig-fn &rest args)
-    (cl-letf* ((jka-compr-verbose nil)
-               (old-write-region (symbol-function #'write-region))
-               ((symbol-function #'write-region)
-                (lambda (start end filename &optional append _visit &rest args)
-                  (apply old-write-region start end filename append 0 args))))
-      (apply orig-fn args)))
-  (advice-add #'undo-tree-save-history :around #'doom*compress-undo-tree-history))
-
-
-(def-package! command-log-mode
-  :commands global-command-log-mode
-  :config
-  (setq command-log-mode-auto-show t
-        command-log-mode-open-log-turns-on-mode nil
-        command-log-mode-is-global t))
-
-
-(def-package! expand-region
-  :commands (er/contract-region er/mark-symbol er/mark-word)
-  :config
-  (defun doom*quit-expand-region ()
-    "Properly abort an expand-region region."
-    (when (memq last-command '(er/expand-region er/contract-region))
-      (er/contract-region 0)))
-  (advice-add #'evil-escape :before #'doom*quit-expand-region)
-  (advice-add #'doom/escape :before #'doom*quit-expand-region))
-
-
-;; `helpful' --- a better *help* buffer
-(let ((map (current-global-map)))
-  (define-key map [remap describe-function] #'helpful-callable)
-  (define-key map [remap describe-command]  #'helpful-command)
-  (define-key map [remap describe-variable] #'helpful-variable)
-  (define-key map [remap describe-key]      #'helpful-key))
+  (global-undo-tree-mode +1))
 
 
 (def-package! ws-butler

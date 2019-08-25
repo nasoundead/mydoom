@@ -3,4 +3,5 @@
 
 (package! lsp-mode)
 (package! lsp-ui)
-(package! company-lsp)
+(when (featurep! :completion company)
+  (package! company-lsp))

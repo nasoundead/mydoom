@@ -34,11 +34,6 @@ See `doom-real-buffer-p' for more information.")
   "The name of the buffer to fall back to if no other buffers exist (will create
 it if it doesn't exist).")
 
-;;;###autoload
-(defvar doom-cleanup-hook ()
-  "A list of hooks run when `doom/cleanup-session' is run, meant to clean up
-leftover buffers and processes.")
-
 
 ;;
 ;; Functions
@@ -54,22 +49,38 @@ BUF should be skipped over by functions like `next-buffer' and `other-buffer'."
 (defun doom-fallback-buffer ()
   "Returns the fallback buffer, creating it if necessary. By default this is the
 scratch buffer. See `doom-fallback-buffer-name' to change this."
-  (get-buffer-create doom-fallback-buffer-name))
+  (let (buffer-list-update-hook)
+    (get-buffer-create doom-fallback-buffer-name)))
 
 ;;;###autoload
 (defalias 'doom-buffer-list #'buffer-list)
 
 ;;;###autoload
-(defun doom-project-buffer-list ()
-  "Return a list of buffers belonging to the current project.
+(defun doom-project-buffer-list (&optional project)
+  "Return a list of buffers belonging to the specified PROJECT.
+
+If PROJECT is nil, default to the current project.
 
 If no project is active, return all buffers."
   (let ((buffers (doom-buffer-list)))
-    (if-let* ((project-root (doom-project-root)))
+    (if-let* ((project-root
+               (if project (expand-file-name project)
+                 (doom-project-root))))
         (cl-loop for buf in buffers
                  if (projectile-project-buffer-p buf project-root)
                  collect buf)
       buffers)))
+
+;;;###autoload
+(defun doom-open-projects ()
+  "Return a list of projects with open buffers."
+  (cl-loop with projects = (make-hash-table :test 'equal :size 8)
+           for buffer in (doom-buffer-list)
+           if (buffer-live-p buffer)
+           if (doom-real-buffer-p buffer)
+           if (with-current-buffer buffer (doom-project-root))
+           do (puthash (abbreviate-file-name it) t projects)
+           finally return (hash-table-keys projects)))
 
 ;;;###autoload
 (defun doom-dired-buffer-p (buf)
@@ -85,6 +96,16 @@ If no project is active, return all buffers."
 (defun doom-temp-buffer-p (buf)
   "Returns non-nil if BUF is temporary."
   (equal (substring (buffer-name buf) 0 1) " "))
+
+;;;###autoload
+(defun doom-visible-buffer-p (buf)
+  "Return non-nil if BUF is visible."
+  (get-buffer-window buf))
+
+;;;###autoload
+(defun doom-buried-buffer-p (buf)
+  "Return non-nil if BUF is not visible."
+  (not (doom-visible-buffer-p buf)))
 
 ;;;###autoload
 (defun doom-non-file-visiting-buffer-p (buf)
@@ -117,8 +138,9 @@ If BUFFER-OR-NAME is omitted or nil, the current buffer is tested."
   (or (bufferp buffer-or-name)
       (stringp buffer-or-name)
       (signal 'wrong-type-argument (list '(bufferp stringp) buffer-or-name)))
-  (when-let* ((buf (get-buffer buffer-or-name)))
-    (and (not (doom-temp-buffer-p buf))
+  (when-let (buf (get-buffer buffer-or-name))
+    (and (buffer-live-p buf)
+         (not (doom-temp-buffer-p buf))
          (or (buffer-local-value 'doom-real-buffer-p buf)
              (run-hook-with-args-until-success 'doom-real-buffer-functions buf)
              (not (run-hook-with-args-until-success 'doom-unreal-buffer-functions buf))))))
@@ -186,6 +208,36 @@ If DERIVED-P, test with `derived-mode-p', otherwise use `eq'."
   (kill-buffer buffer))
 
 ;;;###autoload
+(defun doom-fixup-windows (windows)
+  "Ensure that each of WINDOWS is showing a real buffer or the fallback buffer."
+  (dolist (window windows)
+    (with-selected-window window
+      (when (doom-unreal-buffer-p (window-buffer))
+        (previous-buffer)
+        (when (doom-unreal-buffer-p (window-buffer))
+          (switch-to-buffer (doom-fallback-buffer)))))))
+
+;;;###autoload
+(defun doom-kill-buffer-fixup-windows (buffer)
+  "Kill the BUFFER and ensure all the windows it was displayed in have switched
+to a real buffer or the fallback buffer."
+  (let ((windows (get-buffer-window-list buffer)))
+    (kill-buffer buffer)
+    (doom-fixup-windows (cl-remove-if-not #'window-live-p windows))))
+
+;;;###autoload
+(defun doom-kill-buffers-fixup-windows (buffers)
+  "Kill the BUFFERS and ensure all the windows they were displayed in have
+switched to a real buffer or the fallback buffer."
+  (let ((seen-windows (make-hash-table :test 'eq :size 8)))
+    (dolist (buffer buffers)
+      (let ((windows (get-buffer-window-list buffer)))
+        (kill-buffer buffer)
+        (dolist (window (cl-remove-if-not #'window-live-p windows))
+          (puthash window t seen-windows))))
+    (doom-fixup-windows (hash-table-keys seen-windows))))
+
+;;;###autoload
 (defun doom-kill-matching-buffers (pattern &optional buffer-list)
   "Kill all buffers (in current workspace OR in BUFFER-LIST) that match the
 regex PATTERN. Returns the number of killed buffers."
@@ -208,10 +260,10 @@ regex PATTERN. Returns the number of killed buffers."
 
 ;;;###autoload
 (defun doom*switch-to-fallback-buffer-maybe (orig-fn)
-  "Advice for `kill-this-buffer'. If in a dedicated window, delete it. If there
+  "Advice for `kill-current-buffer'. If in a dedicated window, delete it. If there
 are no real buffers left OR if all remaining buffers are visible in other
 windows, switch to `doom-fallback-buffer'. Otherwise, delegate to original
-`kill-this-buffer'."
+`kill-current-buffer'."
   (let ((buf (current-buffer)))
     (cond ((window-dedicated-p)
            (delete-window))
@@ -224,15 +276,17 @@ windows, switch to `doom-fallback-buffer'. Otherwise, delegate to original
                           (format "Buffer %s is modified; kill anyway?" buf))))
                (message "Aborted")
              (set-buffer-modified-p nil)
-             (when (or ;; if there aren't more real buffers than visible buffers,
-                    ;; then there are no real, non-visible buffers left.
-                    (not (cl-set-difference (doom-real-buffer-list)
-                                            (doom-visible-buffers)))
-                    ;; if we end up back where we start (or previous-buffer
-                    ;; returns nil), we have nowhere left to go
-                    (memq (previous-buffer) (list buf 'nil)))
-               (switch-to-buffer (doom-fallback-buffer)))
-             (kill-buffer buf)))
+             (let (buffer-list-update-hook)
+               (when (or ;; if there aren't more real buffers than visible buffers,
+                      ;; then there are no real, non-visible buffers left.
+                      (not (cl-set-difference (doom-real-buffer-list)
+                                              (doom-visible-buffers)))
+                      ;; if we end up back where we start (or previous-buffer
+                      ;; returns nil), we have nowhere left to go
+                      (memq (switch-to-prev-buffer nil t) (list buf 'nil)))
+                 (switch-to-buffer (doom-fallback-buffer)))
+               (unless (delq (selected-window) (get-buffer-window-list buf nil t))
+                 (kill-buffer buf)))))
           ((funcall orig-fn)))))
 
 
@@ -242,20 +296,16 @@ windows, switch to `doom-fallback-buffer'. Otherwise, delegate to original
 ;;;###autoload
 (defun doom/kill-this-buffer-in-all-windows (buffer &optional dont-save)
   "Kill BUFFER globally and ensure all windows previously showing this buffer
-have switched to a real buffer.
+have switched to a real buffer or the fallback buffer.
 
 If DONT-SAVE, don't prompt to save modified buffers (discarding their changes)."
   (interactive
    (list (current-buffer) current-prefix-arg))
   (cl-assert (bufferp buffer) t)
-  (let ((windows (get-buffer-window-list buffer nil t)))
-    (when (and (buffer-modified-p buffer) dont-save)
-      (with-current-buffer buffer
-        (set-buffer-modified-p nil)))
-    (kill-buffer buffer)
-    (cl-loop for win in windows
-             if (doom-real-buffer-p (window-buffer win))
-             do (with-selected-window win (previous-buffer)))))
+  (when (and (buffer-modified-p buffer) dont-save)
+    (with-current-buffer buffer
+      (set-buffer-modified-p nil)))
+  (doom-kill-buffer-fixup-windows buffer))
 
 ;;;###autoload
 (defun doom/kill-all-buffers (&optional project-p)
@@ -264,10 +314,16 @@ If DONT-SAVE, don't prompt to save modified buffers (discarding their changes)."
 If PROJECT-P (universal argument), don't close windows and only kill buffers
 that belong to the current project."
   (interactive "P")
+  (save-some-buffers)
   (unless project-p
     (delete-other-windows))
   (switch-to-buffer (doom-fallback-buffer))
-  (doom/cleanup-session (if project-p (doom-project-buffer-list))))
+  (let ((buffers (if project-p (doom-project-buffer-list) (doom-buffer-list))))
+    (mapc #'kill-buffer buffers)
+    (when (called-interactively-p 'interactive)
+      (message "Killed %s buffers"
+               (- (length buffers)
+                  (length (cl-remove-if-not #'buffer-live-p buffers)))))))
 
 ;;;###autoload
 (defun doom/kill-other-buffers (&optional project-p)
@@ -276,13 +332,14 @@ that belong to the current project."
 If PROJECT-P (universal argument), kill only buffers that belong to the current
 project."
   (interactive "P")
-  (let ((buffers (if project-p (doom-project-buffer-list) (doom-buffer-list)))
-        (current-buffer (current-buffer)))
-    (dolist (buf buffers)
-      (unless (eq buf current-buffer)
-        (doom-kill-buffer-and-windows buf)))
+  (let ((buffers
+         (delq (current-buffer)
+               (if project-p (doom-project-buffer-list) (doom-buffer-list)))))
+    (mapc #'doom-kill-buffer-and-windows buffers)
     (when (called-interactively-p 'interactive)
-      (message "Killed %s buffers" (length buffers)))))
+      (message "Killed %s buffers"
+               (- (length buffers)
+                  (length (cl-remove-if-not #'buffer-live-p buffers)))))))
 
 ;;;###autoload
 (defun doom/kill-matching-buffers (pattern &optional project-p)
@@ -293,43 +350,45 @@ project."
   (interactive
    (list (read-regexp "Buffer pattern: ")
          current-prefix-arg))
-  (let* ((buffers (if project-p (doom-project-buffer-list) (doom-buffer-list)))
-         (n (doom-kill-matching-buffers pattern buffers)))
+  (let* ((buffers (if project-p (doom-project-buffer-list) (doom-buffer-list))))
+    (doom-kill-matching-buffers pattern buffers)
     (when (called-interactively-p 'interactive)
-      (message "Killed %s buffers" n))))
+      (message "Killed %d buffer(s)"
+               (- (length buffers)
+                  (length (cl-remove-if-not #'buffer-live-p buffers)))))))
 
 ;;;###autoload
-(defun doom/cleanup-session (&optional buffer-list)
-  "Clean up buried buries and orphaned processes in the current workspace. If
-ALL-P (universal argument), clean them up globally."
-  (interactive)
-  (let ((buffers (doom-buried-buffers buffer-list))
-        (n 0))
-    (dolist (buf buffers)
-      (unless (buffer-modified-p buf)
-        (kill-buffer buf)
-        (cl-incf n)))
-    (setq n (+ n (doom/cleanup-buffer-processes)))
-    (dolist (hook doom-cleanup-hook)
-      (let ((m (funcall hook)))
-        (when (integerp m)
-          (setq n (+ n m)))))
-    (message "Cleaned up %s buffers" n)
-    n))
+(defun doom/kill-buried-buffers (&optional project-p)
+  "Kill buffers that are buried.
+
+If PROJECT-P (universal argument), only kill buried buffers belonging to the
+current project."
+  (interactive "P")
+  (let ((buffers (doom-buried-buffers (if project-p (doom-project-buffer-list)))))
+    (mapc #'kill-buffer buffers)
+    (when (called-interactively-p 'interactive)
+      (message "Killed %d buffer(s)"
+               (- (length buffers)
+                  (length (cl-remove-if-not #'buffer-live-p buffers)))))))
 
 ;;;###autoload
-(defun doom/cleanup-buffer-processes ()
-  "Kill all processes that have no visible associated buffers. Return number of
-processes killed."
-  (interactive)
-  (let ((n 0))
-    (dolist (p (process-list))
-      (let ((process-buffer (process-buffer p)))
-        (when (and (process-live-p p)
-                   (not (string= (process-name p) "server"))
-                   (or (not process-buffer)
-                       (and (bufferp process-buffer)
-                            (not (buffer-live-p process-buffer)))))
-          (delete-process p)
-          (cl-incf n))))
-    n))
+(defun doom/kill-project-buffers (project)
+  "Kill buffers for the specified PROJECT."
+  (interactive
+   (list (if-let* ((open-projects (doom-open-projects)))
+             (completing-read
+              "Kill buffers for project: " open-projects
+              nil t nil nil
+              (if-let* ((project-root (doom-project-root))
+                        (project-root (abbreviate-file-name project-root))
+                        ((member project-root open-projects)))
+                  project-root))
+           (message "No projects are open!")
+           nil)))
+  (when project
+    (let ((buffers (doom-project-buffer-list project)))
+      (doom-kill-buffers-fixup-windows buffers)
+      (when (called-interactively-p 'interactive)
+        (message "Killed %d buffer(s)"
+                 (- (length buffers)
+                    (length (cl-remove-if-not #'buffer-live-p buffers))))))))

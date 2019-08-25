@@ -1,5 +1,10 @@
 ;;; lang/latex/+ref.el -*- lexical-binding: t; -*-
 
+(when (stringp +latex-bibtex-file)
+  (setq bibtex-completion-bibliography (list (expand-file-name +latex-bibtex-file))
+        reftex-default-bibliography bibtex-completion-bibliography))
+
+
 (def-package! reftex
   :hook (LaTeX-mode . reftex-mode)
   :config
@@ -18,10 +23,9 @@
           (?t . "\\textcite[]{%l}"))
         reftex-plug-into-AUCTeX t
         reftex-toc-split-windows-fraction 0.3)
-  (when +latex-bibtex-file
-    (setq reftex-default-bibliography (list (expand-file-name +latex-bibtex-file))))
   (map! :map reftex-mode-map
-        :localleader ";" 'reftex-toc)
+        :localleader
+        ";" 'reftex-toc)
   (add-hook! 'reftex-toc-mode-hook
     (reftex-toc-rescan)
     (map! :map 'local
@@ -36,7 +40,3 @@
         bibtex-align-at-equal-sign t
         bibtex-text-indentation 20)
   (define-key bibtex-mode-map (kbd "C-c \\") #'bibtex-fill-entry))
-
-(after! bibtex-completion
-  (when +latex-bibtex-file
-    (setq bibtex-completion-bibliography (list (expand-file-name +latex-bibtex-file)))))

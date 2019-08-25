@@ -2,26 +2,52 @@
 
 ;; A centralized keybinds system, integrated with `which-key' to preview
 ;; available keybindings. All built into one powerful macro: `map!'. If evil is
-;; never loaded, then evil bindings set with `map!' will be ignored.
+;; never loaded, then evil bindings set with `map!' are ignored (i.e. omitted
+;; entirely for performance reasons).
 
 (defvar doom-leader-key "SPC"
-  "The leader prefix key for Evil users.")
+  "The leader prefix key for Evil users.
+
+This needs to be changed from $DOOMDIR/init.el.")
 
 (defvar doom-leader-alt-key "M-SPC"
   "An alternative leader prefix key, used for Insert and Emacs states, and for
-non-evil users.")
+non-evil users.
+
+This needs to be changed from $DOOMDIR/init.el.")
 
 (defvar doom-localleader-key "SPC m"
-  "The localleader prefix key, for major-mode specific commands.")
+  "The localleader prefix key, for major-mode specific commands.
+
+This needs to be changed from $DOOMDIR/init.el.")
 
 (defvar doom-localleader-alt-key "M-SPC m"
-  "The localleader prefix key, for major-mode specific commands.")
+  "The localleader prefix key, for major-mode specific commands. Used for Insert
+and Emacs states, and for non-evil users.
+
+This needs to be changed from $DOOMDIR/init.el.")
 
 (defvar doom-leader-map (make-sparse-keymap)
   "An overriding keymap for <leader> keys.")
 
 
 ;;
+;;; Universal, non-nuclear escape
+
+;; `keyboard-quit' is too much of a nuclear option. I wanted an ESC/C-g to
+;; do-what-I-mean. It serves four purposes (in order):
+;;
+;; 1. Quit active states; e.g. highlights, searches, snippets, iedit,
+;;    multiple-cursors, recording macros, etc.
+;; 2. Close popup windows remotely (if it is allowed to)
+;; 3. Refresh buffer indicators, like git-gutter and flycheck
+;; 4. Or fall back to `keyboard-quit'
+;;
+;; And it should do these things incrementally, rather than all at once. And it
+;; shouldn't interfere with recording macros or the minibuffer. This may require
+;; you press ESC/C-g two or three times on some occasions to reach
+;; `keyboard-quit', but this is much more intuitive.
+
 (defvar doom-escape-hook nil
   "A hook run after C-g is pressed (or ESC in normal mode, for evil users). Both
 trigger `doom/escape'.
@@ -29,13 +55,13 @@ trigger `doom/escape'.
 If any hook returns non-nil, all hooks after it are ignored.")
 
 (defun doom/escape ()
-  "Run the `doom-escape-hook'."
+  "Run `doom-escape-hook'."
   (interactive)
   (cond ((minibuffer-window-active-p (minibuffer-window))
          ;; quit the minibuffer if open.
          (abort-recursive-edit))
         ;; Run all escape hooks. If any returns non-nil, then stop there.
-        ((cl-find-if #'funcall doom-escape-hook))
+        ((run-hook-with-args-until-success 'doom-escape-hook))
         ;; don't abort macros
         ((or defining-kbd-macro executing-kbd-macro) nil)
         ;; Back to the default
@@ -45,54 +71,110 @@ If any hook returns non-nil, all hooks after it are ignored.")
 
 
 ;;
-;; General
+;;; General + leader/localleader keys
 
 (require 'general)
-
 ;; Convenience aliases
 (defalias 'define-key! #'general-def)
 (defalias 'unmap! #'general-unbind)
 
-;; leader/localleader keys
-(define-prefix-command 'doom-leader 'doom-leader-map)
-(defvar doom-leader-alist `((t . ,doom-leader-map)))
-(add-to-list 'emulation-mode-map-alists 'doom-leader-alist)
+;; `map!' uses this instead of `define-leader-key!' because it consumes 20-30%
+;; more startup time, so we reimplement it ourselves.
+(defmacro doom--define-leader-key (&rest keys)
+  (let (prefix forms wkforms)
+    (while keys
+      (let ((key (pop keys))
+            (def (pop keys)))
+        (if (keywordp key)
+            (when (memq key '(:prefix :infix))
+              (setq prefix def))
+          (when prefix
+            (setq key `(general--concat t ,prefix ,key)))
+          (let* ((udef (cdr-safe (doom-unquote def)))
+                 (bdef (if (general--extended-def-p udef)
+                           (general--extract-def (general--normalize-extended-def udef))
+                         def)))
+            (unless (eq bdef :ignore)
+              (push `(define-key doom-leader-map (general--kbd ,key)
+                       ,bdef)
+                    forms))
+            (when-let (desc (cadr (memq :which-key udef)))
+              (push `(which-key-add-key-based-replacements
+                       (general--concat t doom-leader-alt-key ,key)
+                       ,desc)
+                    wkforms)
+              (push `(which-key-add-key-based-replacements
+                       (general--concat t doom-leader-key ,key)
+                       ,desc)
+                    wkforms))))))
+    (macroexp-progn
+     (append (nreverse forms)
+             (when wkforms
+               `((after! which-key
+                   ,@(nreverse wkforms))))))))
 
-;; We avoid `general-create-definer' to ensure that :states, :prefix and
-;; :keymaps cannot be overwritten.
 (defmacro define-leader-key! (&rest args)
+  "Define <leader> keys.
+
+Uses `general-define-key' under the hood, but does not support :states,
+:wk-full-keys or :keymaps. Use `map!' for a more convenient interface.
+
+See `doom-leader-key' and `doom-leader-alt-key' to change the leader prefix."
   `(general-define-key
     :states nil
+    :wk-full-keys nil
     :keymaps 'doom-leader-map
-    :prefix doom-leader-alt-key
     ,@args))
 
-(general-create-definer define-localleader-key!
-  :major-modes t
-  :wk-full-keys nil
-  :prefix doom-localleader-alt-key)
+(defmacro define-localleader-key! (&rest args)
+  "Define <localleader> key.
 
-;; Because :non-normal-prefix doesn't work for non-evil sessions (only evil's
-;; emacs state), we must redefine `define-localleader-key!' once evil is loaded
-(after! evil
-  (defmacro define-leader-key! (&rest args)
+Uses `general-define-key' under the hood, but does not support :major-modes,
+:states, :prefix or :non-normal-prefix. Use `map!' for a more convenient
+interface.
+
+See `doom-localleader-key' and `doom-localleader-alt-key' to change the
+localleader prefix."
+  (if (featurep 'evil)
+      ;; :non-normal-prefix doesn't apply to non-evil sessions (only evil's
+      ;; emacs state)
+      `(general-define-key
+        :states '(normal visual motion emacs insert)
+        :major-modes t
+        :prefix doom-localleader-key
+        :non-normal-prefix doom-localleader-alt-key
+        ,@args)
     `(general-define-key
-      :states '(normal visual motion insert)
-      :keymaps 'doom-leader-map
-      :prefix doom-leader-key
-      :non-normal-prefix doom-leader-alt-key
-      ,@args))
+      :major-modes t
+      :prefix doom-localleader-alt-key
+      ,@args)))
 
-  (general-create-definer define-localleader-key!
-    :states (cdr general-describe-evil-states)
-    :major-modes t
-    :wk-full-keys nil
-    :prefix doom-localleader-key
-    :non-normal-prefix doom-localleader-alt-key))
+;; We use a prefix commands instead of general's :prefix/:non-normal-prefix
+;; properties because general is incredibly slow binding keys en mass with them
+;; in conjunction with :states -- an effective doubling of Doom's startup time!
+(define-prefix-command 'doom/leader 'doom-leader-map)
+(define-key doom-leader-map [override-state] 'all)
+
+;; Bind `doom-leader-key' and `doom-leader-alt-key' as late as possible to give
+;; the user a chance to modify them.
+(defun doom|init-leader-keys ()
+  "Bind `doom-leader-key' and `doom-leader-alt-key'."
+  (let ((map general-override-mode-map))
+    (if (not (featurep 'evil))
+        (progn
+          (cond ((equal doom-leader-alt-key "C-c")
+                 (set-keymap-parent doom-leader-map mode-specific-map))
+                ((equal doom-leader-alt-key "C-x")
+                 (set-keymap-parent doom-leader-map ctl-x-map)))
+          (define-key map (kbd doom-leader-alt-key) 'doom/leader))
+      (evil-define-key* '(normal visual motion) map (kbd doom-leader-key) 'doom/leader)
+      (evil-define-key* '(emacs insert) map (kbd doom-leader-alt-key) 'doom/leader))
+    (general-override-mode +1)))
+(add-hook 'doom-after-init-modules-hook #'doom|init-leader-keys)
 
 
 ;;
-;; Packages
+;;; Packages
 
 (def-package! which-key
   :defer 1
@@ -109,14 +191,20 @@ If any hook returns non-nil, all hooks after it are ignored.")
   (set-face-attribute 'which-key-local-map-description-face nil :weight 'bold)
   (which-key-setup-side-window-bottom)
   (setq-hook! 'which-key-init-buffer-hook line-spacing 3)
+
+  (which-key-add-key-based-replacements doom-leader-key "<leader>")
+  (which-key-add-key-based-replacements doom-localleader-key "<localleader>")
+
   (which-key-mode +1))
 
 
-;; `hydra'
+;;;###package hydra
 (setq lv-use-seperator t)
 
 
 ;;
+;;; `map!' macro
+
 (defvar doom-evil-state-alist
   '((?n . normal)
     (?v . visual)
@@ -147,8 +235,8 @@ For example, :nvi will map to (list 'normal 'visual 'insert). See
 (put :keymap       'lisp-indent-function 'defun)
 (put :mode         'lisp-indent-function 'defun)
 (put :prefix       'lisp-indent-function 'defun)
+(put :prefix-map   'lisp-indent-function 'defun)
 (put :unless       'lisp-indent-function 'defun)
-(put :if           'lisp-indent-function 'defun)
 (put :when         'lisp-indent-function 'defun)
 
 ;; specials
@@ -174,7 +262,7 @@ For example, :nvi will map to (list 'normal 'visual 'insert). See
                (pcase key
                  (:leader
                   (doom--map-commit)
-                  (setq doom--map-fn 'define-leader-key!))
+                  (setq doom--map-fn 'doom--define-leader-key))
                  (:localleader
                   (doom--map-commit)
                   (setq doom--map-fn 'define-localleader-key!))
@@ -190,11 +278,22 @@ For example, :nvi will map to (list 'normal 'visual 'insert). See
                                  collect (intern (concat (symbol-name m) "-map")))
                         rest)
                   (push :map rest))
-                 ((or :if :when :unless)
+                 ((or :when :unless)
                   (doom--map-nested (list (intern (doom-keyword-name key)) (pop rest)) rest)
                   (setq rest nil))
+                 (:prefix-map
+                  (cl-destructuring-bind (prefix . desc)
+                      (doom-enlist (pop rest))
+                    (let ((keymap (intern (format "doom-leader-%s-map" desc))))
+                      (setq rest
+                            (append (list :desc desc prefix keymap
+                                          :prefix prefix)
+                                    rest))
+                      (push `(defvar ,keymap (make-sparse-keymap))
+                            doom--map-forms))))
                  (:prefix
-                  (cl-destructuring-bind (prefix . desc) (doom-enlist (pop rest))
+                  (cl-destructuring-bind (prefix . desc)
+                      (doom-enlist (pop rest))
                     (doom--map-set (if doom--map-fn :infix :prefix)
                                    prefix)
                     (when (stringp desc)
@@ -207,7 +306,7 @@ For example, :nvi will map to (list 'normal 'visual 'insert). See
                                  (:map evil-outer-text-objects-map ,key ,outer))
                           doom--map-forms)))
                  (_
-                  (condition-case e
+                  (condition-case _
                       (doom--map-def (pop rest) (pop rest) (doom--keyword-to-states key) desc)
                     (error
                      (error "Not a valid `map!' property: %s" key)))
@@ -251,7 +350,7 @@ For example, :nvi will map to (list 'normal 'visual 'insert). See
             ((setq def (cons 'list
                              (if (and (equal key "")
                                       (null def))
-                                 `(nil :which-key ,desc)
+                                 `(:ignore t :which-key ,desc)
                                (plist-put (general--normalize-extended-def def)
                                           :which-key desc))))))))
   (dolist (state states)
@@ -316,7 +415,11 @@ Properties
   :mode [MODE(s)] [...]           inner keybinds are applied to major MODE(s)
   :map [KEYMAP(s)] [...]          inner keybinds are applied to KEYMAP(S)
   :keymap [KEYMAP(s)] [...]       same as :map
-  :prefix [PREFIX] [...]          set keybind prefix for following keys
+  :prefix [PREFIX] [...]          set keybind prefix for following keys. PREFIX
+                                  can be a cons cell: (PREFIX . DESCRIPTION)
+  :prefix-map [PREFIX] [...]      same as :prefix, but defines a prefix keymap
+                                  where the following keys will be bound. DO NOT
+                                  USE THIS IN YOUR PRIVATE CONFIG.
   :after [FEATURE] [...]          apply keybinds when [FEATURE] loads
   :textobj KEY INNER-FN OUTER-FN  define a text object keybind pair
   :if [CONDITION] [...]

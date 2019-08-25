@@ -47,6 +47,11 @@ are open."
   (with-silent-modifications
     (ansi-color-apply-on-region compilation-filter-start (point))))
 
+;;;###autoload
+(defun doom|disable-show-paren-mode ()
+  "Turn off `show-paren-mode' buffer-locally."
+  (setq-local show-paren-mode nil))
+
 
 ;;
 ;; Commands
@@ -82,16 +87,6 @@ See `display-line-numbers' for what these values mean."
                (_ (symbol-name next))))))
 
 ;;;###autoload
-(defun doom/reload-theme ()
-  "Reset the current color theme and fonts."
-  (interactive)
-  (let ((theme (or (car-safe custom-enabled-themes) doom-theme)))
-    (when theme
-      (mapc #'disable-theme custom-enabled-themes))
-    (doom|init-theme)
-    (doom|init-fonts)))
-
-;;;###autoload
 (defun doom/delete-frame ()
   "Delete the current frame, but ask for confirmation if it isn't empty."
   (interactive)
@@ -101,7 +96,7 @@ See `display-line-numbers' for what these values mean."
     (save-buffers-kill-emacs)))
 
 ;;;###autoload
-(defun doom/window-zoom ()
+(defun doom/window-maximize-buffer ()
   "Close other windows to focus on this one. Activate again to undo this. If the
 window changes before then, the undo expires.
 
@@ -110,6 +105,9 @@ Alternatively, use `doom/window-enlargen'."
   (if (and (one-window-p)
            (assq ?_ register-alist))
       (jump-to-register ?_)
+    (when (and (bound-and-true-p +popup-mode)
+               (+popup-window-p))
+      (user-error "Cannot maximize a popup, use `+popup/raise' first or use `doom/window-enlargen' instead"))
     (window-configuration-to-register ?_)
     (delete-other-windows)))
 
@@ -117,38 +115,46 @@ Alternatively, use `doom/window-enlargen'."
 ;;;###autoload
 (defun doom/window-enlargen ()
   "Enlargen the current window to focus on this one. Does not close other
-windows (unlike `doom/window-zoom') Activate again to undo."
+windows (unlike `doom/window-maximize-buffer') Activate again to undo."
   (interactive)
   (setq doom--window-enlargened
         (if (and doom--window-enlargened
                  (assq ?_ register-alist))
             (ignore (ignore-errors (jump-to-register ?_)))
           (window-configuration-to-register ?_)
-          (if (window-dedicated-p)
-              ;; `window-resize' and `window-max-delta' don't respect
-              ;; `ignore-window-parameters', so we gotta force it to.
-              (cl-letf* ((old-window-resize (symbol-function #'window-resize))
-                         (old-window-max-delta (symbol-function #'window-max-delta))
-                         ((symbol-function #'window-resize)
-                          (lambda (window delta &optional horizontal _ignore pixelwise)
-                            (funcall old-window-resize window delta horizontal
-                                     t pixelwise)))
-                         ((symbol-function #'window-max-delta)
-                          (lambda (&optional window horizontal _ignore trail noup nodown pixelwise)
-                            (funcall old-window-max-delta window horizontal t
-                                     trail noup nodown pixelwise))))
-                (maximize-window))
-            (maximize-window))
-          t)))
+          (let* ((window (selected-window))
+                 (dedicated-p (window-dedicated-p window))
+                 (preserved-p (window-parameter window 'window-preserved-size))
+                 (ignore-window-parameters t))
+            (unwind-protect
+                (progn
+                  (when dedicated-p
+                    (set-window-dedicated-p window nil))
+                  (when preserved-p
+                    (set-window-parameter window 'window-preserved-size nil))
+                  (maximize-window window))
+              (set-window-dedicated-p window dedicated-p)
+              (when preserved-p
+                (set-window-parameter window 'window-preserved-size preserved-p)))
+            t))))
 
 ;;;###autoload
-(defun doom/reload-font ()
-  "Reload `doom-font', `doom-variable-pitch-font', and `doom-unicode-font', if
-set."
+(defun doom/window-maximize-horizontally ()
+  "Delete all windows to the left and right of the current window."
   (interactive)
-  (when doom-font
-    (set-frame-font doom-font t))
-  (doom|init-fonts))
+  (require 'windmove)
+  (save-excursion
+    (while (ignore-errors (windmove-left)) (delete-window))
+    (while (ignore-errors (windmove-right)) (delete-window))))
+
+;;;###autoload
+(defun doom/window-maximize-vertically ()
+  "Delete all windows above and below the current window."
+  (interactive)
+  (require 'windmove)
+  (save-excursion
+    (while (ignore-errors (windmove-up)) (delete-window))
+    (while (ignore-errors (windmove-down)) (delete-window))))
 
 ;;;###autoload
 (defun doom/set-frame-opacity (opacity)
@@ -161,24 +167,35 @@ OPACITY is an integer between 0 to 100, inclusive."
                           100))))
   (set-frame-parameter nil 'alpha opacity))
 
-
-;;
-;; Modes
-
+(defvar-local doom--buffer-narrowed-origin nil)
+(defvar-local doom--buffer-narrowed-window-start nil)
 ;;;###autoload
-(define-minor-mode doom-big-font-mode
-  "A global mode that resizes the font, for streams, screen-sharing and
-presentations.
+(defun doom/clone-and-narrow-buffer (beg end &optional clone-p)
+  "Restrict editing in this buffer to the current region, indirectly. With CLONE-P,
+clone the buffer and hard-narrow the selection. If mark isn't active, then widen
+the buffer (if narrowed).
 
-Uses `doom-big-font' when enabled."
-  :init-value nil
-  :lighter " BIG"
-  :global t
-  (unless doom-big-font
-    (user-error "`doom-big-font' must be set to a valid font"))
-  (unless doom-font
-    (user-error "`doom-font' must be set to a valid font"))
-  (set-frame-font (if doom-big-font-mode
-                      doom-big-font
-                    doom-font)
-                  t t))
+Inspired from http://demonastery.org/2013/04/emacs-evil-narrow-region/"
+  (interactive
+   (list (or (bound-and-true-p evil-visual-beginning) (region-beginning))
+         (or (bound-and-true-p evil-visual-end)       (region-end))
+         current-prefix-arg))
+  (cond ((or (region-active-p)
+             (not (buffer-narrowed-p)))
+         (unless (region-active-p)
+           (setq beg (line-beginning-position)
+                 end (line-end-position)))
+         (setq deactivate-mark t)
+         (when clone-p
+           (let ((old-buf (current-buffer)))
+             (switch-to-buffer (clone-indirect-buffer nil nil))
+             (setq doom--buffer-narrowed-origin old-buf)))
+         (setq doom--buffer-narrowed-window-start (window-start))
+         (narrow-to-region beg end))
+        (doom--buffer-narrowed-origin
+         (kill-current-buffer)
+         (switch-to-buffer doom--buffer-narrowed-origin)
+         (setq doom--buffer-narrowed-origin nil))
+        (t
+         (widen)
+         (set-window-start nil doom--buffer-narrowed-window-start))))

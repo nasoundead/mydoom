@@ -4,7 +4,6 @@
 ;; Packages
 
 (after! go-mode
-  (set-env! "GOPATH" "GOROOT")
   (set-docsets! 'go-mode "Go")
   (set-repl-handler! 'go-mode #'gorepl-run)
   (set-lookup-handlers! 'go-mode
@@ -20,7 +19,9 @@
                 "gofmt"
               "goimports"))))
 
-  (add-hook 'go-mode-hook #'go-eldoc-setup)
+  (if (featurep! +lsp)
+      (add-hook 'go-mode-local-vars-hook #'lsp!)
+    (add-hook 'go-mode-hook #'go-eldoc-setup))
 
   (map! :map go-mode-map
         :localleader
@@ -57,7 +58,8 @@
 
 
 (def-package! company-go
-  :when (featurep! :completion company)
+  :when (and (featurep! :completion company)
+             (not (featurep! +lsp)))
   :after go-mode
   :config
   (set-company-backend! 'go-mode 'company-go)

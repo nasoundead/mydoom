@@ -27,7 +27,7 @@ easier to scroll through.")
         elfeed-enclosure-default-dir (concat doom-local-dir "elfeed/enclosures/")
         elfeed-show-entry-switch #'pop-to-buffer
         elfeed-show-entry-delete #'+rss/delete-pane
-        shr-max-image-proportion 0.6)
+        shr-max-image-proportion 0.8)
 
   (set-popup-rule! "^\\*elfeed-entry"
     :size 0.75 :actions '(display-buffer-below-selected)
@@ -57,7 +57,7 @@ easier to scroll through.")
     (define-key! elfeed-show-mode-map
       [remap next-buffer]     #'+rss/next
       [remap previous-buffer] #'+rss/previous))
-  (when (featurep! :feature evil +everywhere)
+  (when (featurep! :editor evil +everywhere)
     (evil-define-key 'normal elfeed-search-mode-map
       "q" #'elfeed-kill-buffer
       "r" #'elfeed-search-update--force
