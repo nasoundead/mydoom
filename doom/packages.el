@@ -7,4 +7,5 @@
              ; :repo "hlissner/emacs-snippets"
              ; :files ("*")))
 
+(package! zenburn-theme)
 (package! tiny)

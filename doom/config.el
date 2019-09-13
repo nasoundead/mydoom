@@ -45,11 +45,31 @@
 ;;   (setenv "PATH" (mapconcat #'identity exec-path path-separator))
 ;;  )
 
-(setq doom-theme 'doom-nord)
-(setq doom-font (font-spec :family "Fira Code" :size 14)
+;; (setq doom-theme 'doom-nord)
+(setq doom-theme 'zenburn)
+(setq doom-font (font-spec :family "Source Code Pro" :size 14)
       doom-variable-pitch-font (font-spec :family "Fira Sans")
       doom-unicode-font (font-spec :family "DejaVu Sans Mono")
       doom-big-font (font-spec :family "Fira Mono" :size 19))
 
 (map! :v "v" #'er/expand-region
-      :v "V" #'er/contract-region)
+      :v "V" #'er/contract-region
+      :gi "C-f" #'forward-char
+      :gi "C-b" #'backward-char)
+
+(add-hook 'org-mode-hook (lambda ()
+  "Beautify Org Checkbox Symbol"
+  (push '("[ ]" . "☐") prettify-symbols-alist)
+  (push '("[X]" . "☑" ) prettify-symbols-alist)
+  (push '("[-]" . "❍" ) prettify-symbols-alist)
+  (prettify-symbols-mode)))
+
+(defface org-checkbox-done-text
+  '((t (:foreground "#71696A" :strike-through t)))
+  "Face for the text part of a checked org-mode checkbox.")
+
+(font-lock-add-keywords
+ 'org-mode
+ `(("^[ \t]*\\(?:[-+*]\\|[0-9]+[).]\\)[ \t]+\\(\\(?:\\[@\\(?:start:\\)?[0-9]+\\][ \t]*\\)?\\[\\(?:X\\|\\([0-9]+\\)/\\2\\)\\][^\n]*\n\\)"
+    1 'org-checkbox-done-text prepend))
+ 'append)
