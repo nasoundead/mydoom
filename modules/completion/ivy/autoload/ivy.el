@@ -214,7 +214,7 @@ If ARG (universal argument), open selection in other-window."
 
 (defun +ivy--tasks-open-action (x)
   "Jump to the file and line of the current task."
-  (cl-destructuring-bind (label type file line) x
+  (cl-destructuring-bind (_label type file line) x
     (with-ivy-window
       (find-file (expand-file-name file (doom-project-root)))
       (goto-char (point-min))
@@ -399,20 +399,13 @@ order.
                    (counsel-projectile-grep))
                (counsel-projectile-grep)))))
         (`ag
-         (let ((args (concat (if all-files " -a")
+         (let ((args (concat " -S" (if all-files " -a")
                              (unless recursive " --depth 1"))))
            (counsel-ag query directory args (format prompt args))))
         (`rg
-         (let ((args (concat (if all-files " -uu")
+         (let ((args (concat " -S" (if all-files " -uu")
                              (unless recursive " --maxdepth 1"))))
            (counsel-rg query directory args (format prompt args))))
-        (`pt
-         (let ((counsel-pt-base-command
-                (concat counsel-pt-base-command
-                        (if all-files " -U")
-                        (unless recursive " --depth=1")))
-               (default-directory directory))
-           (counsel-pt query)))
         (_ (error "No search engine specified"))))))
 
 (defun +ivy--get-command (format)
@@ -451,8 +444,6 @@ ARG (universal argument), include all files, even hidden or compressed ones."
 ;;;###autoload (autoload '+ivy/rg-from-cwd "completion/ivy/autoload/ivy" nil t)
 ;;;###autoload (autoload '+ivy/ag "completion/ivy/autoload/ivy" nil t)
 ;;;###autoload (autoload '+ivy/ag-from-cwd "completion/ivy/autoload/ivy" nil t)
-;;;###autoload (autoload '+ivy/pt "completion/ivy/autoload/ivy" nil t)
-;;;###autoload (autoload '+ivy/pt-from-cwd "completion/ivy/autoload/ivy" nil t)
 ;;;###autoload (autoload '+ivy/grep "completion/ivy/autoload/ivy" nil t)
 ;;;###autoload (autoload '+ivy/grep-from-cwd "completion/ivy/autoload/ivy" nil t)
 
@@ -480,3 +471,19 @@ active, the last known search is used.
 
 If ALL-FILES-P, search compressed and hidden files as well."
             engine)))
+
+
+;;
+;;; Wrappers around `counsel-compile'
+
+;;;###autoload
+(defun +ivy/compile ()
+  "Execute a compile command from the current buffer's directory."
+  (interactive)
+  (counsel-compile default-directory))
+
+;;;###autoload
+(defun +ivy/project-compile ()
+  "Execute a compile command from the current project's root."
+  (interactive)
+  (counsel-compile (projectile-project-root)))

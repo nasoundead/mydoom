@@ -1,20 +1,21 @@
 ;;; lang/rust/config.el -*- lexical-binding: t; -*-
 
-(def-package! rust-mode
+(use-package! rust-mode
   :defer t
   :config
   (setq rust-indent-method-chain t)
+  (add-hook 'rust-mode-hook #'rainbow-delimiters-mode)
 
   ;; This is necessary because both plugins are fighting for supremacy in
   ;; `auto-mode-alist', so rustic-mode *must* load second. It only needs to
   ;; happen once.
   ;;
   ;; rust-mode is still required for `racer'.
-  (defun +rust|init ()
-    "Switch to `rustic-mode', if it's available."
-    (when (require 'rustic nil t)
-      (rustic-mode)))
-  (add-hook 'rust-mode-hook #'+rust|init)
+  (add-hook! 'rust-mode-hook
+    (defun +rust-init-h ()
+      "Switch to `rustic-mode', if it's available."
+      (when (require 'rustic nil t)
+        (rustic-mode))))
 
   (set-docsets! '(rust-mode rustic-mode) "Rust")
   (when (featurep! +lsp)
@@ -28,11 +29,10 @@
   (when (featurep! :tools editorconfig)
     (after! editorconfig
       (pushnew! editorconfig-indentation-alist
-                '(rust-mode rust-indent-offset)
                 '(rustic-mode rustic-indent-offset)))))
 
 
-(def-package! racer
+(use-package! racer
   :unless (featurep! +lsp)
   :hook ((rust-mode rustic-mode) . racer-mode)
   :config
@@ -41,7 +41,7 @@
     :documentation '+rust-racer-lookup-documentation))
 
 
-(def-package! rustic
+(use-package! rustic
   :when EMACS26+
   :after rust-mode
   :preface
@@ -52,19 +52,29 @@
         ;; use :editor format instead
         rustic-format-on-save nil)
 
-  ;; `rustic-setup-rls' uses `package-installed-p' unnecessarily, which breaks
-  ;; because Doom lazy loads package.el.
-  (defun +rust*disable-package-installed-p-call (orig-fn &rest args)
-    (cl-letf (((symbol-function 'package-installed-p)
-               (symbol-function 'ignore)))
-      (apply orig-fn args)))
-  (advice-add #'rustic-setup-rls :around #'+rust*disable-package-installed-p-call))
+  (add-hook 'rustic-mode-hook #'rainbow-delimiters-mode)
+
+  (defadvice! +rust--dont-install-packages-p (orig-fn &rest args)
+    :around #'rustic-setup-rls
+    (cl-letf (;; `rustic-setup-rls' uses `package-installed-p' to determine if
+              ;; lsp-mode/elgot are available. This breaks because Doom doesn't
+              ;; use package.el to begin with (and lazy loads it).
+              ((symbol-function #'package-installed-p)
+               (lambda (pkg)
+                 (require pkg nil t)))
+              ;; If lsp/elgot isn't available, it attempts to install lsp-mode
+              ;; via package.el. Doom manages its own dependencies so we disable
+              ;; that behavior.
+              ((symbol-function #'rustic-install-rls-client-p)
+               (lambda (&rest _)
+                 (message "No RLS server running."))))
+      (apply orig-fn args))))
 
 
 ;;
 ;;; Tools
 
-(def-package! cargo
+(use-package! cargo
   :after rust-mode
   :config
   (defvar +rust-keymap
@@ -73,7 +83,7 @@
       rust-mode-map))
   (map! :map +rust-keymap
         :localleader
-        (:prefix "b"
+        (:prefix ("b" . "build")
           :desc "cargo add"    "a" #'cargo-process-add
           :desc "cargo build"  "b" #'cargo-process-build
           :desc "cargo bench"  "B" #'cargo-process-bench

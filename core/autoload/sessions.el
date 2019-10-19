@@ -1,5 +1,11 @@
 ;;; core/autoload/sessions.el -*- lexical-binding: t; -*-
 
+(defvar desktop-base-file-name)
+(defvar desktop-dirname)
+(defvar desktop-restore-eager)
+(defvar desktop-file-modtime)
+
+
 ;;
 ;;; Helpers
 
@@ -59,9 +65,6 @@
   "TODO"
   (add-hook 'window-setup-hook #'doom-load-session 'append))
 
-;;;###autoload
-(add-to-list 'command-switch-alist (cons "--restore" #'doom-restore-session-handler))
-
 
 ;;
 ;;; Commands
@@ -89,8 +92,8 @@
    (let ((session-file (doom-session-file)))
      (list (or (read-file-name "Session to restore: "
                                (file-name-directory session-file)
-                               nil t
-                               (file-name-nondirectory session-file))
+                               (file-name-nondirectory session-file)
+                               t)
                (user-error "No session selected. Aborting")))))
   (unless file
     (error "No session file selected"))
@@ -104,7 +107,6 @@
    (let ((session-file (doom-session-file)))
      (list (or (read-file-name "Save session to: "
                                (file-name-directory session-file)
-                               nil nil
                                (file-name-nondirectory session-file))
                (user-error "No session selected. Aborting")))))
   (unless file

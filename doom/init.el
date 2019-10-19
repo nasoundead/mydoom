@@ -4,11 +4,9 @@
 (doom! 
        :completion
        (company          ; the ultimate code completion backend
-        +auto            ; as-you-type code completion
-        +childframe)
+        +auto)
        (ivy	   ; a search engine for love and life
-        +fuzzy
-        +childframe)
+        +fuzzy)
 
        :ui
        deft              ; notational velocity for Emacs
@@ -16,8 +14,10 @@
        doom-dashboard    ; a nifty splash screen for Emacs
        modeline     ; a snazzy Atom-inspired mode-line
        doom-quit         ; DOOM quit-message prompts when you quit Emacs
-       hl-todo           ; highlight TODO/FIXME/NOTE tags
        nav-flash         ; blink the current line after jumping
+	   hl-todo
+	   hydra
+	   indent-guides
        treemacs
        (popup            ; tame sudden yet inevitable temporary windows
         +all             ; catch all popups that start with an asterix
@@ -52,8 +52,9 @@
        lsp
 
        :lang
-       (cc +irony +rtags); C/C++/Obj-C madness
-       (java +lsp)
+       ;(cc +rtags); C/C++/Obj-C madness
+	   ;cc
+       (java +meghanada)
        emacs-lisp        ; drown in parentheses
        javascript        ; all(hope(abandon(ye(who(enter(here))))))
        markdown          ; writing docs for people to ignore
@@ -67,11 +68,6 @@
        (python +lsp +pyvenv)   ; beautiful is better than ugly
        rest              ; Emacs as a REST client
        web        ; the tubes
-
-       :app
-
-       :collab
-        impatient-mode    ; show off code over HTTP
 
        :config
        (default +bindings +smartparens))

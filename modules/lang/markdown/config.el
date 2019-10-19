@@ -15,7 +15,7 @@ capture, the end position, and the output buffer.")
 ;;
 ;;; Packages
 
-(def-package! markdown-mode
+(use-package! markdown-mode
   :mode ("/README\\(?:\\.\\(?:markdown\\|md\\)\\)?\\'" . gfm-mode)
   :init
   (setq markdown-enable-wiki-links t
@@ -38,12 +38,17 @@ capture, the end position, and the output buffer.")
   (set-lookup-handlers! '(markdown-mode gfm-mode)
     :file #'markdown-follow-thing-at-point)
 
-  (add-hook 'markdown-mode-hook #'auto-fill-mode)
-
-  (sp-with-modes '(markdown-mode gfm-mode)
-    (sp-local-pair "```" "```" :post-handlers '(:add ("||\n[i]" "RET"))))
+  ;; Prevent mis-fontification of YAML metadata blocks in `markdown-mode' which
+  ;; occurs when the first line contains a colon in it. See
+  ;; https://github.com/jrblevin/markdown-mode/issues/328.
+  (advice-add :markdown-match-generic-metadata
+              :override #'+markdown-disable-front-matter-fontification-a)
 
   (map! :map markdown-mode-map
+        :n [tab] #'markdown-cycle
+        :n "TAB" #'markdown-cycle
+        :n [backtab] #'markdown-shifttab
+        :n "<S-tab>" #'markdown-shifttab
         :i "M-*" #'markdown-insert-list-item
         :i "M-b" #'markdown-insert-bold
         :i "M-i" #'markdown-insert-italic
@@ -62,8 +67,11 @@ capture, the end position, and the output buffer.")
           :n "M-r" #'browse-url-of-file)
         (:localleader
           "o" #'markdown-open
-          "b" #'markdown-preview
-          (:prefix "i"
+          "p" #'markdown-preview
+          "e" #'markdown-export
+          (:when (featurep! +grip)
+            "p" #'grip-mode)
+          (:prefix ("i" . "insert")
             "t" #'markdown-toc-generate-toc
             "i" #'markdown-insert-image
             "l" #'markdown-insert-link))))

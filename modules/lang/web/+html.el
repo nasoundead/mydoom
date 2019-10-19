@@ -1,19 +1,20 @@
 ;;; lang/web/+html.el -*- lexical-binding: t; -*-
 
-(def-package! web-mode
-  :mode "\\.p?html?$"
-  :mode "\\.\\(?:tpl\\|blade\\)\\(\\.php\\)?$"
-  :mode "\\.erb$"
-  :mode "\\.jsp$"
-  :mode "\\.as[cp]x$"
-  :mode "\\.hbs$"
-  :mode "\\.mustache$"
-  :mode "\\.tsx$"
-  :mode "\\.vue$"
-  :mode "\\.twig$"
-  :mode "\\.jinja$"
-  :mode "wp-content/themes/.+/.+\\.php$"
-  :mode "templates/.+\\.php$"
+(use-package! web-mode
+  :mode "\\.p?html?\\'"
+  :mode "\\.\\(?:tpl\\|blade\\)\\(?:\\.php\\)?\\'"
+  :mode "\\.erb\\'"
+  :mode "\\.jsp\\'"
+  :mode "\\.as[cp]x\\'"
+  :mode "\\.hbs\\'"
+  :mode "\\.mustache\\'"
+  :mode "\\.svelte\\'"
+  :mode "\\.tsx\\'"
+  :mode "\\.vue\\'"
+  :mode "\\.twig\\'"
+  :mode "\\.jinja\\'"
+  :mode "wp-content/themes/.+/.+\\.php\\'"
+  :mode "templates/.+\\.php\\'"
   :config
   (set-docsets! 'web-mode "HTML" "CSS" "Twig" "WordPress")
 
@@ -63,8 +64,7 @@
         (:localleader
           :desc "Rehighlight buffer" "h" #'web-mode-buffer-highlight
           :desc "Indent buffer"      "i" #'web-mode-buffer-indent
-
-          (:prefix "a"
+          (:prefix ("a" . "attribute")
             "b" #'web-mode-attribute-beginning
             "e" #'web-mode-attribute-end
             "i" #'web-mode-attribute-insert
@@ -73,8 +73,7 @@
             "k" #'web-mode-attribute-kill
             "p" #'web-mode-attribute-previous
             "p" #'web-mode-attribute-transpose)
-
-          (:prefix "b"
+          (:prefix ("b" . "block")
             "b" #'web-mode-block-beginning
             "c" #'web-mode-block-close
             "e" #'web-mode-block-end
@@ -82,8 +81,7 @@
             "n" #'web-mode-block-next
             "p" #'web-mode-block-previous
             "s" #'web-mode-block-select)
-
-          (:prefix "d"
+          (:prefix ("d" . "dom")
             "a" #'web-mode-dom-apostrophes-replace
             "d" #'web-mode-dom-errors-show
             "e" #'web-mode-dom-entities-encode
@@ -91,8 +89,7 @@
             "q" #'web-mode-dom-quotes-replace
             "t" #'web-mode-dom-traverse
             "x" #'web-mode-dom-xpath)
-
-          (:prefix "e"
+          (:prefix ("e" . "element")
             "/" #'web-mode-element-close
             "a" #'web-mode-element-content-select
             "b" #'web-mode-element-beginning
@@ -111,8 +108,7 @@
             "u" #'web-mode-element-parent
             "v" #'web-mode-element-vanish
             "w" #'web-mode-element-wrap)
-
-          (:prefix "t"
+          (:prefix ("t" . "tag")
             "a" #'web-mode-tag-attributes-sort
             "b" #'web-mode-tag-beginning
             "e" #'web-mode-tag-end
@@ -136,10 +132,10 @@
 (after! pug-mode
   (set-company-backend! 'pug-mode 'company-web-jade))
 (after! web-mode
-  (set-company-backend! 'web-mode 'company-web-html))
+  (set-company-backend! 'web-mode 'company-css 'company-web-html))
 (after! slim-mode
   (set-company-backend! 'slim-mode 'company-web-slim))
 
 
 (when (featurep! +lsp)
-  (add-hook! (html-mode web-mode) #'lsp!))
+  (add-hook! '(html-mode-hook web-mode-hook) #'lsp!))

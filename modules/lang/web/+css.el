@@ -1,7 +1,8 @@
 ;;; lang/web/+css.el -*- lexical-binding: t; -*-
 
 ;; An improved newline+continue comment function
-(setq-hook! css-mode comment-indent-function #'+css/comment-indent-new-line)
+(setq-hook! css-mode
+  comment-indent-function #'+css/comment-indent-new-line)
 
 (map! :map (css-mode-map scss-mode-map less-css-mode-map)
       :localleader
@@ -24,7 +25,8 @@
 ;;
 ;;; Major modes
 
-(add-hook! (css-mode sass-mode stylus-mode) #'rainbow-mode)
+(add-hook! '(css-mode-hook sass-mode-hook stylus-mode-hook)
+           #'rainbow-mode)
 
 ;; built-in, and contains both css-mode & scss-mode
 (after! css-mode
@@ -32,7 +34,7 @@
   (add-hook 'css-mode-hook #'rainbow-delimiters-mode)
   (set-company-backend! '(css-mode scss-mode)
     (if EMACS26+
-        ;; css-mode's built in completion is superior in 26+
+        ;; DEPRECATED css-mode's built in completion is superior in 26+
         'company-capf
       'company-css))
   (map! :map scss-mode-map :localleader "b" #'+css/scss-build))
@@ -47,10 +49,11 @@
 ;;; Tools
 
 (when (featurep! +lsp)
-  (add-hook! (css-mode sass-mode less-css-mode) #'lsp!))
+  (add-hook! '(css-mode-hook sass-mode-hook less-css-mode-hook)
+             #'lsp!))
 
 
-(def-package! counsel-css
+(use-package! counsel-css
   :when (featurep! :completion ivy)
   :commands counsel-css
   :hook (css-mode . counsel-css-imenu-setup)
@@ -59,7 +62,7 @@
         :localleader ";" #'counsel-css))
 
 
-(def-package! helm-css-scss
+(use-package! helm-css-scss
   :when (featurep! :completion helm)
   :defer t
   :init

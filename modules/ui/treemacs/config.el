@@ -6,13 +6,6 @@
       treemacs-persist-file (concat doom-cache-dir "treemacs-persist")
       treemacs-last-error-persist-file (concat doom-cache-dir "treemacs-last-error-persist"))
 
-(after! treemacs-persistence
-  ;; This variable is defined with defconst, so we must wait to change it until
-  ;; it has loaded.
-  (setq treemacs--last-error-persist-file
-        (concat doom-cache-dir
-                "treemacs-persist-at-last-error")))
-
 
 (after! treemacs
   (set-popup-rule! "^ \\*Treemacs"
@@ -25,22 +18,26 @@
   (treemacs-follow-mode -1)
 
   (after! ace-window
-    (setq aw-ignored-buffers (delq 'treemacs-mode aw-ignored-buffers))))
+    (delq! 'treemacs-mode aw-ignored-buffers)))
 
 
-(def-package! treemacs-evil
+(use-package! treemacs-evil
   :when (featurep! :editor evil +everywhere)
   :after treemacs
   :config
   (define-key! evil-treemacs-state-map
     [return] #'treemacs-RET-action
     [tab]    #'treemacs-TAB-action
-    "TAB"    #'treemacs-TAB-action))
+    "TAB"    #'treemacs-TAB-action
+    ;; To be consistent with C-w {v,s}:
+    "o v"    #'treemacs-visit-node-horizontal-split
+    "o s"    #'treemacs-visit-node-vertical-split))
 
 
-(def-package! treemacs-projectile
+(use-package! treemacs-projectile
   :after treemacs)
 
-(def-package! treemacs-magit
+
+(use-package! treemacs-magit
   :when (featurep! :tools magit)
   :after treemacs magit)

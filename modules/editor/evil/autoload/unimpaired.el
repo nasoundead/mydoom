@@ -44,8 +44,8 @@
     (user-error "Must be called from a file-visiting buffer"))
   (let* ((directory (file-name-directory buffer-file-name))
          (filename (file-name-nondirectory buffer-file-name))
-         (files (doom-files-in directory :depth 0 :sort t :match "/[^._][^/]*$"))
-         (index (cl-position filename files :test #'string=)))
+         (files (doom-glob (file-name-directory buffer-file-name) "[!.]*"))
+         (index (cl-position filename files :test #'file-equal-p)))
     (when (null index)
       (user-error "Couldn't find this file in current directory"))
     (let ((index (+ index n)))
@@ -85,31 +85,31 @@
 
 ;;; ]u / [u
 ;;;###autoload (autoload '+evil:url-encode "editor/evil/autoload/unimpaired" nil t)
-(evil-define-operator +evil:url-encode (count &optional beg end type)
+(evil-define-operator +evil:url-encode (_count &optional beg end)
   "TODO"
-  (interactive "<c><R>")
+  (interactive "<c><r>")
   (+evil--encode beg end #'url-encode-url))
 
 ;;;###autoload (autoload '+evil:url-decode "editor/evil/autoload/unimpaired" nil t)
-(evil-define-operator +evil:url-decode (count &optional beg end type)
+(evil-define-operator +evil:url-decode (_count &optional beg end)
   "TODO"
-  (interactive "<c><R>")
+  (interactive "<c><r>")
   (+evil--encode beg end #'url-unhex-string))
 
 ;;; ]y / [y
 ;;;###autoload (autoload '+evil:c-string-encode "editor/evil/autoload/unimpaired" nil t)
-(evil-define-operator +evil:c-string-encode (count &optional beg end type)
+(evil-define-operator +evil:c-string-encode (_count &optional beg end)
   "TODO"
-  (interactive "<c><R>")
+  (interactive "<c><r>")
   (+evil--encode
    beg end
    (lambda (text)
      (replace-regexp-in-string "[\"\\]" (lambda (ch) (concat "\\" ch)) text))))
 
 ;;;###autoload (autoload '+evil:c-string-decode "editor/evil/autoload/unimpaired" nil t)
-(evil-define-operator +evil:c-string-decode (count &optional beg end type)
+(evil-define-operator +evil:c-string-decode (_count &optional beg end)
   "TODO"
-  (interactive "<c><R>")
+  (interactive "<c><r>")
   (+evil--encode
    beg end
    (lambda (text)
