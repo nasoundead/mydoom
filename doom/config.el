@@ -46,8 +46,8 @@
 ;;  )
 
 ;; (setq doom-theme 'doom-nord)
-(setq doom-theme 'zenburn)
-(setq doom-font (font-spec :family "Source Code Pro" :size 14)
+(setq doom-theme 'doom-one-light)
+(setq doom-font (font-spec :family "Fira Code" :size 14)
       doom-variable-pitch-font (font-spec :family "Fira Sans")
       doom-unicode-font (font-spec :family "DejaVu Sans Mono")
       doom-big-font (font-spec :family "Fira Mono" :size 19))
