@@ -46,7 +46,7 @@
 
        :tools
        make              ; run make tasks from Emacs
-       ;; magit             ; a git porcelain for Emacs
+      ;;  magit             ; a git porcelain for Emacs
        pdf               ; pdf enhancements
        rgb               ; creating color strings
        flycheck
