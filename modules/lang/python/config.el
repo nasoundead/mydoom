@@ -8,6 +8,9 @@ called.")
   "CLI arguments to initialize 'jupiter console %s' with when
 `+python/open-ipython-repl' is called.")
 
+(after! projectile
+  (pushnew! projectile-project-root-files "setup.py" "requirements.txt"))
+
 
 ;;
 ;; Packages
@@ -18,7 +21,7 @@ called.")
   (setq python-environment-directory doom-cache-dir
         python-indent-guess-indent-offset-verbose nil)
   :config
-  (set-repl-handler! 'python-mode #'+python/open-repl)
+  (set-repl-handler! 'python-mode #'+python/open-repl :persist t)
   (set-docsets! 'python-mode "Python 3" "NumPy" "SciPy")
 
   (set-pretty-symbols! 'python-mode
@@ -98,10 +101,11 @@ called.")
     :documentation #'anaconda-mode-show-doc)
   (set-popup-rule! "^\\*anaconda-mode" :select nil)
 
-  (add-hook! 'python-mode-local-vars-hook
+  (add-hook! 'python-mode-local-vars-hook :append
     (defun +python-init-anaconda-mode-maybe-h ()
       "Enable `anaconda-mode' if `lsp-mode' isn't."
-      (unless (bound-and-true-p lsp-mode)
+      (unless (or (bound-and-true-p lsp-mode)
+                  (bound-and-true-p lsp--buffer-deferred))
         (anaconda-mode +1))))
 
   (defun +python-auto-kill-anaconda-processes-h ()
@@ -264,9 +268,12 @@ called.")
 
 (use-package! lsp-python-ms
   :when (featurep! +lsp)
-  :after lsp-clients
+  :after (python lsp-clients)
   :init
   (setq lsp-python-ms-dir (concat doom-etc-dir "mspyls/"))
+
+  (after! python
+    (setq lsp-python-ms-python-executable-cmd python-shell-interpreter))
 
   ;; HACK lsp-python-ms shouldn't install itself if it isn't present. This
   ;; circumvents LSP falling back to pyls when lsp-python-ms is absent.

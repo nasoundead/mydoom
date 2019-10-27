@@ -48,6 +48,14 @@
 (unless IS-WINDOWS
   (setq tramp-default-method "ssh")) ; faster than the default scp
 
+(defadvice! +default-inhibit-authinfo-for-sudo-a (orig-fn &rest args)
+  "Don't consult .authinfo for local sudo TRAMP buffers."
+  :around #'tramp-read-passwd
+  (let ((auth-sources
+         (unless (equal tramp-current-method "sudo")
+           auth-sources)))
+    (apply orig-fn args)))
+
 
 ;;
 ;;; Smartparens config
@@ -255,8 +263,9 @@
         "s--" #'doom/decrease-font-size
         ;; Conventional text-editing keys & motions
         "s-a" #'mark-whole-buffer
-        :gn "s-/" #'evilnc-comment-or-uncomment-lines
-        :v  "s-/" #'evilnc-comment-operator
+        "s-/" (λ! (save-excursion (comment-line 1)))
+        :n "s-/" #'evilnc-comment-or-uncomment-lines
+        :v "s-/" #'evilnc-comment-operator
         :gi  [s-backspace] #'doom/backward-kill-to-bol-and-indent
         :gi  [s-left]      #'doom/backward-to-bol-or-indent
         :gi  [s-right]     #'doom/forward-to-last-non-comment-or-eol
@@ -305,12 +314,16 @@
   "dd"   #'doom/toggle-debug-mode
   "df"   #'doom/help-faq
   "dh"   #'doom/help
+  "dk"   #'doom/goto-packages-file
+  "dl"   #'doom/help-search-load-path
   "dm"   #'doom/help-modules
   "dn"   #'doom/help-news
   "dN"   #'doom/help-news-search
+  "di"   #'doom/goto-doomblock
   "dp"   #'doom/help-packages
   "dP"   #'doom/help-package-homepage
-  "dc"   #'doom/help-package-config
+  "dc"   #'doom/goto-config-file
+  "dC"   #'doom/help-package-config
   "ds"   #'doom/sandbox
   "dt"   #'doom/toggle-profiler
   "dv"   #'doom/version

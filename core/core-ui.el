@@ -3,6 +3,9 @@
 ;;
 ;;; Variables
 
+(defvar doom-init-theme-p nil
+  "If non-nil, a theme as been loaded.")
+
 (defvar doom-theme nil
   "A symbol representing the Emacs theme to load at startup.
 
@@ -173,6 +176,9 @@ read-only or not file-visiting."
       scroll-conservatively 10
       scroll-margin 0
       scroll-preserve-screen-position t
+      ;; Reduce cursor lag by a tiny bit by not auto-adjusting `window-vscroll'
+      ;; for tall lines.
+      auto-window-vscroll nil
       ;; mouse
       mouse-wheel-scroll-amount '(5 ((shift) . 2))
       mouse-wheel-progressive-speed nil)  ; don't accelerate scrolling
@@ -388,6 +394,13 @@ treat Emacs as a non-application window."
         (set-window-configuration doom--ediff-saved-wconf)))))
 
 
+(use-package! goto-addr
+  :hook (text-mode . goto-address-mode)
+  :hook (prog-mode . goto-address-prog-mode)
+  :config
+  (define-key goto-address-highlight-keymap (kbd "RET") #'goto-address-at-point))
+
+
 (use-package! hl-line
   ;; Highlights the current line
   :hook ((prog-mode text-mode conf-mode) . hl-line-mode)
@@ -429,7 +442,8 @@ treat Emacs as a non-application window."
   :config
   (setq show-paren-delay 0.1
         show-paren-highlight-openparen t
-        show-paren-when-point-inside-paren t)
+        show-paren-when-point-inside-paren t
+        show-paren-when-point-in-periphery t)
   (show-paren-mode +1))
 
 
@@ -622,7 +636,8 @@ behavior). Do not set this directly, this is let-bound in `doom-init-theme-h'.")
   "Set up `doom-load-theme-hook' to run after `load-theme' is called."
   :after-while #'load-theme
   (unless no-enable
-    (setq doom-theme theme)
+    (setq doom-theme theme
+          doom-init-theme-p t)
     (run-hooks 'doom-load-theme-hook)))
 
 (defadvice! doom--prefer-compiled-theme-a (orig-fn &rest args)

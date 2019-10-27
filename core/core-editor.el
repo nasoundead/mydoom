@@ -77,6 +77,14 @@ possible."
       auto-save-list-file-name (concat doom-cache-dir "autosave")
       backup-directory-alist `(("." . ,(concat doom-cache-dir "backup/"))))
 
+(add-hook! 'after-save-hook
+  (defun doom-guess-mode-h ()
+    "Guess mode when saving a file in `fundamental-mode'."
+    (and (eq major-mode 'fundamental-mode)
+         (buffer-file-name (buffer-base-buffer))
+         (eq (current-buffer) (window-buffer (selected-window))) ; only visible buffers
+         (set-auto-mode))))
+
 
 ;;
 ;;; Formatting
@@ -115,11 +123,20 @@ possible."
 ;; Save clipboard contents into kill-ring before replacing them
 (setq save-interprogram-paste-before-kill t)
 
+;; Fixes the clipboard in tty Emacs by piping clipboard I/O through xclip, xsel,
+;; pb{copy,paste}, wl-copy, termux-clipboard-get, or getclip (cygwin).
+(add-hook! 'tty-setup-hook
+  (defun doom-init-clipboard-in-tty-emacs-h ()
+    (and (not (getenv "SSH_CONNECTION"))
+         (require 'xclip nil t)
+         (xclip-mode +1))))
+
 
 ;;
 ;;; Extra file extensions to support
 
 (push '("/LICENSE\\'" . text-mode) auto-mode-alist)
+(push '("\\.log\\'" . text-mode) auto-mode-alist)
 
 
 ;;
@@ -145,16 +162,16 @@ possible."
   ;; changes when we switch to a buffer or when we focus the Emacs frame.
   (defun doom-auto-revert-buffer-h ()
     "Auto revert current buffer, if necessary."
-    (unless auto-revert-mode
-      (let ((revert-without-query (list ".")))
+    (unless (or auto-revert-mode (active-minibuffer-window))
+      ;; Only prompts for confirmation when buffer is unsaved.
+      (let ((revert-without-query (list "")))
         (auto-revert-handler))))
 
   (defun doom-auto-revert-buffers-h ()
-    "Auto revert's stale buffers (that are visible)."
-    (unless auto-revert-mode
-      (dolist (buf (doom-visible-buffers))
-        (with-current-buffer buf
-          (doom-auto-revert-buffer-h))))))
+    "Auto revert stale buffers in visible windows, if necessary."
+    (dolist (buf (doom-visible-buffers))
+      (with-current-buffer buf
+        (doom-auto-revert-buffer-h)))))
 
 
 (use-package! recentf
@@ -163,6 +180,13 @@ possible."
   :after-call after-find-file
   :commands recentf-open-files
   :config
+  (defun doom--recent-file-truename (file)
+    (if (or (file-remote-p file nil t)
+            (not (file-remote-p file)))
+        (file-truename file)
+      file))
+  (setq recentf-filename-handlers '(doom--recent-file-truename abbreviate-file-name))
+
   (setq recentf-save-file (concat doom-cache-dir "recentf")
         recentf-auto-cleanup 'never
         recentf-max-menu-items 0
@@ -171,15 +195,7 @@ possible."
         (list "\\.\\(?:gz\\|gif\\|svg\\|png\\|jpe?g\\)$" "^/tmp/" "^/ssh:"
               "\\.?ido\\.last$" "\\.revive$" "/TAGS$" "^/var/folders/.+$"
               ;; ignore private DOOM temp files
-              (lambda (path)
-                (ignore-errors (file-in-directory-p path doom-local-dir)))))
-
-  (defun doom--recent-file-truename (file)
-    (if (or (file-remote-p file nil t)
-            (not (file-remote-p file)))
-        (file-truename file)
-      file))
-  (setq recentf-filename-handlers '(doom--recent-file-truename abbreviate-file-name))
+              (concat "^" (recentf-apply-filename-handlers doom-local-dir))))
 
   (add-hook! '(doom-switch-window-hook write-file-functions)
     (defun doom--recentf-touch-buffer-h ()
@@ -452,10 +468,20 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   :after-call after-find-file
   :config
   (global-so-long-mode +1)
+  ;; Don't disable syntax highlighting and line numbers, or make the buffer
+  ;; read-only, in `so-long-minor-mode', so we can have a basic editing
+  ;; experience in them, at least. It will remain off in `so-long-mode',
+  ;; however, because long files have a far bigger impact on Emacs performance.
   (delq! 'font-lock-mode so-long-minor-modes)
   (delq! 'display-line-numbers-mode so-long-minor-modes)
+  (delq! 'buffer-read-only so-long-variable-overrides 'assq)
+  ;; ...but at least reduce the level of syntax highlighting
+  (add-to-list 'so-long-variable-overrides '(font-lock-maximum-decoration . 1))
+  ;; But disable everything else that may be unnecessary/expensive for large
+  ;; or wide buffers.
   (appendq! so-long-minor-modes
             '(flycheck-mode
+              flyspell-mode
               eldoc-mode
               smartparens-mode
               highlight-numbers-mode
