@@ -39,6 +39,15 @@ target file.
 Is relative to `org-directory', unless it is absolute. Is used in Doom's default
 `org-capture-templates'.")
 
+(defvar +org-capture-journal-file "journal.org"
+  "Default target for storing timestamped journal entries.
+
+Is relative to `org-directory', unless it is absolute. Is used in Doom's default
+`org-capture-templates'.")
+
+(defvar +org-capture-projects-file "projects.org"
+  "Default, centralized target for org-capture templates.")
+
 (defvar +org-initial-fold-level 2
   "The initial fold level of org files when no #+STARTUP options for it.")
 
@@ -83,53 +92,78 @@ path too.")
 
 (defun +org-init-appearance-h ()
   "Configures the UI for `org-mode'."
-  (setq-default
-   org-indirect-buffer-display 'current-window
-   org-eldoc-breadcrumb-separator " → "
-   org-enforce-todo-dependencies t
-   org-entities-user
-   '(("flat"  "\\flat" nil "" "" "266D" "♭")
-     ("sharp" "\\sharp" nil "" "" "266F" "♯"))
-   org-fontify-done-headline t
-   org-fontify-quote-and-verse-blocks t
-   org-fontify-whole-heading-line t
-   org-footnote-auto-label 'plain
-   org-hide-leading-stars t
-   org-hide-leading-stars-before-indent-mode t
-   org-image-actual-width nil
-   org-list-description-max-indent 4
-   org-priority-faces
-   '((?A . error)
-     (?B . warning)
-     (?C . success))
-   org-refile-targets
-   '((nil :maxlevel . 3)
-     (org-agenda-files :maxlevel . 3))
-   org-startup-indented t
-   org-tags-column -80
-   org-todo-keywords
-   '((sequence "TODO(t)" "PROJ(p)" "NEXT(n)" "WAIT(h)" "|" "DONE(d)" "ABRT(a)")
-     (sequence "[ ](T)" "[-](-)" "[?](?)" "|" "[X](x)"))
-   org-todo-keyword-faces
-   '(("[-]" :inherit (font-lock-constant-face bold))
-     ("[?]" :inherit (warning bold))
-     ("PROJ" :inherit (bold default))
-     ("WAIT" :inherit (warning bold))
-     ("ABRT" :inherit (error bold)))
-   org-use-sub-superscripts '{}
+  (setq org-indirect-buffer-display 'current-window
+        org-eldoc-breadcrumb-separator " → "
+        org-enforce-todo-dependencies t
+        org-entities-user
+        '(("flat"  "\\flat" nil "" "" "266D" "♭")
+          ("sharp" "\\sharp" nil "" "" "266F" "♯"))
+        org-fontify-done-headline t
+        org-fontify-quote-and-verse-blocks t
+        org-fontify-whole-heading-line t
+        org-footnote-auto-label 'plain
+        org-hide-leading-stars t
+        org-hide-leading-stars-before-indent-mode t
+        org-image-actual-width nil
+        org-list-description-max-indent 4
+        org-priority-faces
+        '((?A . error)
+          (?B . warning)
+          (?C . success))
+        org-startup-indented t
+        org-tags-column -80
+        org-use-sub-superscripts '{})
 
-   ;; Scale up LaTeX previews a bit (default is too small)
-   org-format-latex-options (plist-put org-format-latex-options :scale 1.5))
+  (setq org-refile-targets
+        '((nil :maxlevel . 3)
+          (org-agenda-files :maxlevel . 3))
+        ;; Without this, completers like ivy/helm are only given the first level of
+        ;; each outline candidates. i.e. all the candidates under the "Tasks" heading
+        ;; are just "Tasks/". This is unhelpful. We want the full path to each refile
+        ;; target! e.g. FILE/Tasks/heading/subheading
+        org-refile-use-outline-path 'file
+        org-outline-path-complete-in-steps nil)
 
-  ;; Previews are usually rendered with light backgrounds, so ensure their
-  ;; background (and foreground) match the current theme.
-  (setq-default
-   org-format-latex-options
-   (plist-put org-format-latex-options
-              :background
-              (face-attribute (or (cadr (assq 'default face-remapping-alist))
-                                  'default)
-                              :background nil t)))
+  ;; Scale up LaTeX previews a bit (default is too small)
+  (setq org-format-latex-options (plist-put org-format-latex-options :scale 1.5))
+  ;; ...and fix their background w/ themes
+  (add-hook! 'doom-load-theme-hook
+    (defun +org-refresh-latex-background ()
+      "Previews are usually rendered with light backgrounds, so ensure their
+background (and foreground) match the current theme."
+      (plist-put! org-format-latex-options
+                  :background
+                  (face-attribute (or (cadr (assq 'default face-remapping-alist))
+                                      'default)
+                                  :background nil t))))
+
+  ;; HACK Face specs fed directly to `org-todo-keyword-faces' don't respect
+  ;;      underlying faces like the `org-todo' face does, so we define our own
+  ;;      intermediary faces that extend from org-todo.
+  (custom-declare-face '+org-todo-active '((t (:inherit (bold font-lock-constant-face org-todo)))) "")
+  (custom-declare-face '+org-todo-project '((t (:inherit (bold font-lock-doc-face org-todo)))) "")
+  (custom-declare-face '+org-todo-onhold '((t (:inherit (bold warning org-todo)))) "")
+  (setq org-todo-keywords
+        '((sequence
+           "TODO(t)"  ; A task that needs doing & is ready to do
+           "PROJ(p)"  ; An ongoing project that cannot be completed in one step
+           "STRT(s)"  ; A task that is in progress
+           "WAIT(w)"  ; Something is holding up this task; or it is paused
+           "|"
+           "DONE(d)"  ; Task successfully completed
+           "KILL(k)") ; Task was cancelled, aborted or is no longer applicable
+          (sequence
+           "[ ](T)"   ; A task that needs doing
+           "[-](S)"   ; Task is in progress
+           "[?](W)"   ; Task is being held up or paused
+           "|"
+           "[X](D)")) ; Task was completed
+        org-todo-keyword-faces
+        '(("[-]"  . +org-todo-active)
+          ("STRT" . +org-todo-active)
+          ("[?]"  . +org-todo-onhold)
+          ("WAIT" . +org-todo-onhold)
+          ("PROJ" . +org-todo-project)))
 
   (defadvice! +org-display-link-in-eldoc-a (orig-fn &rest args)
     "Display full link in minibuffer when cursor/mouse is over it."
@@ -138,21 +172,22 @@ path too.")
           (format "Link: %s" link))
         (apply orig-fn args)))
 
-  ;; Don't do automatic indent detection in org files
-  (add-to-list 'doom-detect-indentation-excluded-modes 'org-mode nil #'eq)
+  ;; Automatic indent detection in org files is meaningless
+  (cl-pushnew 'org-mode doom-detect-indentation-excluded-modes :test #'eq)
 
   (set-pretty-symbols! 'org-mode
     :name "#+NAME:"
     :src_block "#+BEGIN_SRC"
-    :src_block_end "#+END_SRC")
-
-  (add-hook 'doom-load-theme-hook #'+org-init-appearance-h))
+    :src_block_end "#+END_SRC"))
 
 
 (defun +org-init-babel-h ()
   (setq org-src-preserve-indentation t  ; use native major-mode indentation
         org-src-tab-acts-natively t
-        org-confirm-babel-evaluate nil  ; you don't need my permission
+        ;; You don't need my permission (just be careful, mkay?)
+        org-confirm-babel-evaluate nil
+        org-link-elisp-confirm-function nil
+        org-link-shell-confirm-function t   ; except you, too dangerous
         ;; Show src buffer in popup, and don't monopolize the frame
         org-src-window-setup 'other-window)
 
@@ -218,25 +253,53 @@ I like:
         org-capture-templates
         '(("t" "Personal todo" entry
            (file+headline +org-capture-todo-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t :kill-buffer t)
+           "* [ ] %?\n%i\n%a" :prepend t)
           ("n" "Personal notes" entry
            (file+headline +org-capture-notes-file "Inbox")
-           "* %u %?\n%i\n%a" :prepend t :kill-buffer t)
+           "* %u %?\n%i\n%a" :prepend t)
+          ("j" "Journal" entry
+           (file+olp+datetree +org-capture-journal-file "Inbox")
+           "* %U %?\n%i\n%a" :prepend t)
 
           ;; Will use {project-root}/{todo,notes,changelog}.org, unless a
           ;; {todo,notes,changelog}.org file is found in a parent directory.
           ;; Uses the basename from `+org-capture-todo-file',
           ;; `+org-capture-changelog-file' and `+org-capture-notes-file'.
           ("p" "Templates for projects")
-          ("pt" "Project todo" entry  ; {project-root}/todo.org
+          ("pt" "Project-local todo" entry  ; {project-root}/todo.org
            (file+headline +org-capture-project-todo-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t :kill-buffer t)
-          ("pn" "Project notes" entry  ; {project-root}/notes.org
+           "* TODO %?\n%i\n%a" :prepend t)
+          ("pn" "Project-local notes" entry  ; {project-root}/notes.org
            (file+headline +org-capture-project-notes-file "Inbox")
-           "* TODO %?\n%i\n%a" :prepend t :kill-buffer t)
-          ("pc" "Project changelog" entry  ; {project-root}/changelog.org
-           (file+headline +org-capture-project-notes-file "Unreleased")
-           "* TODO %?\n%i\n%a" :prepend t :kill-buffer t)))
+           "* %U %?\n%i\n%a" :prepend t)
+          ("pc" "Project-local changelog" entry  ; {project-root}/changelog.org
+           (file+headline +org-capture-project-changelog-file "Unreleased")
+           "* %U %?\n%i\n%a" :prepend t)
+
+          ;; Will use {org-directory}/{+org-capture-projects-file} and store
+          ;; these under {ProjectName}/{Tasks,Notes,Changelog} headings. They
+          ;; support `:parents' to specify what headings to put them under, e.g.
+          ;; :parents ("Projects")
+          ("o" "Centralized templates for projects")
+          ("ot" "Project todo" entry
+           (function +org-capture-central-project-todo-file)
+           "* TODO %?\n %i\n %a"
+           :heading "Tasks"
+           :prepend nil)
+          ("on" "Project notes" entry
+           (function +org-capture-central-project-notes-file)
+           "* %U %?\n %i\n %a"
+           :heading "Notes"
+           :prepend t)
+          ("oc" "Project changelog" entry
+           (function +org-capture-central-project-changelog-file)
+           "* %U %?\n %i\n %a"
+           :heading "Changelog"
+           :prepend t)))
+
+  ;; Kill capture buffers by default (unless they've been visited)
+  (after! org-capture
+    (org-capture-put :kill-buffer t))
 
   (defadvice! +org--capture-expand-variable-file-a (file)
     "If a variable is used for a file path in `org-capture-template', it is used
@@ -570,10 +633,16 @@ between the two."
         "o" #'org-set-property
         "p" #'org-priority
         "q" #'org-set-tags-command
-        "r" #'org-refile
         "s" #'org-schedule
         "t" #'org-todo
         "T" #'org-todo-list
+        (:prefix ("r" . "refile")
+          "." #'+org/refile-to-current-file
+          "c" #'+org/refile-to-running-clock
+          "l" #'+org/refile-to-last-location
+          "o" #'+org/refile-to-other-window
+          "O" #'+org/refile-to-other-buffers
+          "r" #'org-refile) ; to all `org-refile-targets'
         (:prefix ("a" . "attachments")
           "a" #'org-attach/file
           "u" #'org-attach/uri
@@ -627,11 +696,12 @@ between the two."
 (defun +org-init-popup-rules-h ()
   (set-popup-rules!
     '(("^\\*Org Links" :slot -1 :vslot -1 :size 2 :ttl 0)
-      ("^\\*\\(?:Agenda Com\\|Calendar\\|Org \\(?:Export Dispatcher\\|Select\\)\\)"
+      ("^\\*\\(?:Agenda Com\\|Calendar\\|Org Export Dispatcher\\)"
        :slot -1 :vslot -1 :size #'+popup-shrink-to-fit :ttl 0)
+      ("^\\*Org Select" :slot -1 :vslot -2 :ttl 0 :size 0.25)
       ("^\\*Org Agenda"    :ignore t)
-      ("^\\*Org Src"       :size 0.4 :quit nil :select t :autosave t :modeline t :ttl nil)
-      ("^CAPTURE.*\\.org$" :size 0.2 :quit nil :select t :autosave t))))
+      ("^\\*Org Src"       :size 0.4  :quit nil :select t :autosave t :modeline t :ttl nil)
+      ("^CAPTURE.*\\.org$" :size 0.25 :quit nil :select t :autosave t))))
 
 
 (defun +org-init-protocol-lazy-loader-h ()
@@ -739,7 +809,7 @@ compelling reason, so..."
               org-clock-cancel)
     (org-clock-load))
   :config
-  (setq org-clock-persist t
+  (setq org-clock-persist 'history
         ;; Resume when clocking into task with open clock
         org-clock-in-resume t)
   (add-hook 'kill-emacs-hook #'org-clock-save))
@@ -861,6 +931,8 @@ compelling reason, so..."
       ;; ol-rmail
       ;; ol-eww
       ))
+
+  (add-hook 'org-mode-local-vars-hook #'eldoc-mode)
 
   (add-hook! 'org-mode-hook
              ;; `show-paren-mode' causes flickering with indent overlays made by

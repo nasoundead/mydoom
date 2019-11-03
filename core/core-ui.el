@@ -482,7 +482,7 @@ treat Emacs as a non-application window."
 (add-hook! '(completion-list-mode-hook Man-mode-hook)
            #'hide-mode-line-mode)
 
-;; Better fontification of number literals in code
+;; Many major modes do no highlighting of number literals, so we do it for them
 (use-package! highlight-numbers
   :hook ((prog-mode conf-mode) . highlight-numbers-mode)
   :config (setq highlight-numbers-generic-regexp "\\_<[[:digit:]]+\\(?:\\.[0-9]*\\)?\\_>"))
@@ -599,12 +599,14 @@ behavior). Do not set this directly, this is let-bound in `doom-init-theme-h'.")
 (defun doom-init-fonts-h ()
   "Loads `doom-font'."
   (cond (doom-font
-         (add-to-list
-          'default-frame-alist
+         (cl-pushnew
           (cons 'font
                 (cond ((stringp doom-font) doom-font)
                       ((fontp doom-font) (font-xlfd-name doom-font))
-                      ((signal 'wrong-type-argument (list '(fontp stringp) doom-font)))))))
+                      ((signal 'wrong-type-argument (list '(fontp stringp)
+                                                          doom-font)))))
+          default-frame-alist
+          :key #'car :test #'eq))
         ((display-graphic-p)
          (setq doom-font (face-attribute 'default :font)))))
 
@@ -661,7 +663,7 @@ startup (or theme switch) time, so long as `doom--prefer-theme-elc' is non-nil."
   "Initialize Doom's user interface by applying all its advice and hooks."
   (run-hook-wrapped 'doom-init-ui-hook #'doom-try-run-hook)
 
-  (add-to-list 'kill-buffer-query-functions #'doom-protect-fallback-buffer-h nil 'eq)
+  (add-hook 'kill-buffer-query-functions #'doom-protect-fallback-buffer-h)
   (add-hook 'after-change-major-mode-hook #'doom-highlight-non-default-indentation-h 'append)
 
   ;; Initialize custom switch-{buffer,window,frame} hooks:

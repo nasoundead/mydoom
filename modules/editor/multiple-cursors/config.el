@@ -1,5 +1,14 @@
 ;;; editor/multiple-cursors/config.el -*- lexical-binding: t; -*-
 
+(use-package! evil-multiedit
+  :when (featurep! :editor evil)
+  :defer t
+  :config
+  (map! :map (evil-multiedit-state-map evil-multiedit-insert-state-map)
+        "C-n" #'evil-multiedit-next
+        "C-p" #'evil-multiedit-prev))
+
+
 (use-package! evil-mc
   :when (featurep! :editor evil)
   :commands (evil-mc-make-cursor-here
@@ -25,7 +34,10 @@
              evil-mc-make-and-goto-prev-match
              evil-mc-skip-and-goto-prev-match)
   :init
+  ;; The included keybindings are too imposing and are likely to cause
+  ;; conflicts, so we'll set them ourselves.
   (defvar evil-mc-key-map (make-sparse-keymap))
+
   :config
   (global-evil-mc-mode +1)
 
@@ -47,7 +59,11 @@
                 (doom/forward-to-last-non-comment-or-eol . evil-mc-execute-default-call)
                 (doom/backward-kill-to-bol-and-indent . evil-mc-execute-default-call)
                 ;; Have evil-mc work with explicit `evil-escape' (on C-g)
-                (evil-escape . evil-mc-execute-default-evil-normal-state)))
+                (evil-escape . evil-mc-execute-default-evil-normal-state)
+                ;; Add `evil-org' support
+                (evil-org-delete . evil-mc-execute-default-evil-delete)
+                (evil-org-delete-char . evil-mc-execute-default-evil-delete)
+                (evil-org-delete-backward-char . evil-mc-execute-default-evil-delete)))
     (cl-pushnew `(,(car fn) (:default . ,(or (cdr fn) #'evil-mc-execute-default-call-with-count)))
                 evil-mc-custom-known-commands
                 :test #'eq
@@ -71,7 +87,13 @@
   ;; Forward declare these so that ex completion and evil-mc support is
   ;; recognized before the autoloaded functions are loaded.
   (evil-add-command-properties '+evil:align :evil-mc t)
-  (evil-add-command-properties '+multiple-cursors:evil-mc :evil-mc t))
+  (evil-add-command-properties '+multiple-cursors:evil-mc :evil-mc t)
+
+  (map! :map evil-mc-key-map
+        :nv "C-n" #'evil-mc-make-and-goto-next-cursor
+        :nv "C-N" #'evil-mc-make-and-goto-last-cursor
+        :nv "C-p" #'evil-mc-make-and-goto-prev-cursor
+        :nv "C-P" #'evil-mc-make-and-goto-first-cursor))
 
 
 (after! multiple-cursors-core

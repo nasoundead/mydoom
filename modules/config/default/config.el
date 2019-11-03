@@ -7,9 +7,13 @@
     minibuffer-local-must-match-map
     minibuffer-local-isearch-map
     read-expression-map
-    ,@(when (featurep! :completion ivy)
-        '(ivy-minibuffer-map
-          ivy-switch-buffer-map)))
+    ,@(cond ((featurep! :completion ivy)
+             '(ivy-minibuffer-map
+               ivy-switch-buffer-map))
+            ((featurep! :completion helm)
+             '(helm-map
+               helm-ag-map
+               helm-read-file-map))))
   "A list of all the keymaps used for the minibuffer.")
 
 
@@ -47,14 +51,6 @@
 ;;;###package tramp
 (unless IS-WINDOWS
   (setq tramp-default-method "ssh")) ; faster than the default scp
-
-(defadvice! +default-inhibit-authinfo-for-sudo-a (orig-fn &rest args)
-  "Don't consult .authinfo for local sudo TRAMP buffers."
-  :around #'tramp-read-passwd
-  (let ((auth-sources
-         (unless (equal tramp-current-method "sudo")
-           auth-sources)))
-    (apply orig-fn args)))
 
 
 ;;
@@ -285,7 +281,6 @@
   "E"    #'doom/sandbox
   "M"    #'doom/describe-active-minor-mode
   "O"    #'+lookup/online
-  "R"    #'doom/reload
   "T"    #'doom/toggle-profiler
   "V"    #'set-variable
   "W"    #'+default/man-or-woman
@@ -346,10 +341,13 @@
   "P"    #'find-library)
 
 (after! which-key
-  (which-key-add-key-based-replacements "C-h r" "reload")
-  (when (featurep 'evil)
-    (which-key-add-key-based-replacements (concat doom-leader-key     " r") "reload")
-    (which-key-add-key-based-replacements (concat doom-leader-alt-key " r") "reload")))
+  (let ((prefix-re (regexp-opt (list doom-leader-key doom-leader-alt-key))))
+    (cl-pushnew `((,(format "\\`\\(?:<\\(?:\\(?:f1\\|help\\)>\\)\\|C-h\\|%s h\\) d\\'" prefix-re))
+                  nil . "doom")
+                which-key-replacement-alist)
+    (cl-pushnew `((,(format "\\`\\(?:<\\(?:\\(?:f1\\|help\\)>\\)\\|C-h\\|%s h\\) r\\'" prefix-re))
+                  nil . "reload")
+                which-key-replacement-alist)))
 
 
 (when (featurep! +bindings)

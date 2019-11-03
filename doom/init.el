@@ -4,9 +4,12 @@
 (doom! 
        :completion
        (company          ; the ultimate code completion backend
-        +auto)
+        +auto
+        +childframe)
        (ivy
-        +fuzzy)
+        +fuzzy
+        ;; +childframe
+        +icons)
 
        :ui
        deft              ; notational velocity for Emacs
@@ -23,6 +26,7 @@
         +all             ; catch all popups that start with an asterix
         +defaults)       ; default popup rules
        unicode           ; extended unicode support for various languages
+       pretty-code
        vc-gutter         ; vcs diff in the fringe
        vi-tilde-fringe   ; fringe tildes to mark beyond EOB
        window-select     ; visually switch windows
@@ -36,6 +40,7 @@
         multiple-cursors  ; editing in many places at once
         rotate-text       ; cycle region at point between text candidates
         fold
+        objed
         word-wrap
 
        :emacs
@@ -46,7 +51,7 @@
 
        :tools
        make              ; run make tasks from Emacs
-      ;;  magit             ; a git porcelain for Emacs
+       magit             ; a git porcelain for Emacs
        pdf               ; pdf enhancements
        rgb               ; creating color strings
        flycheck
@@ -60,7 +65,6 @@
        eshell
 
        :lang
-       ;(cc +rtags); C/C++/Obj-C madness
 	     cc
        (java +lsp)
        emacs-lisp        ; drown in parentheses
