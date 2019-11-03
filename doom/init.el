@@ -65,7 +65,7 @@
        eshell
 
        :lang
-	     cc
+	    ;;  cc
        (java +lsp)
        emacs-lisp        ; drown in parentheses
        javascript        ; all(hope(abandon(ye(who(enter(here))))))
