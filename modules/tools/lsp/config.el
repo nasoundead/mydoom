@@ -53,12 +53,14 @@ auto-killed (which is usually an expensive process)."
              lsp--cur-workspace))))
 
   (defadvice! +lsp-prompt-if-no-project-a (root)
-    "Prompt for the project root only if no project was found.
-Also refuses to recognize $HOME as a valid project root."
+    "Prompt for the project root only if no project was found."
     :filter-return #'lsp--calculate-root
-    (cond ((and root (not (file-equal-p root "~")))
-           root)
-          (lsp-auto-guess-root
+    (cond ((not lsp-auto-guess-root) nil)
+          ((null root) nil)
+          ((not (cl-find-if (lambda (dir)
+                              (and (lsp--files-same-host dir root)
+                                   (file-in-directory-p dir root)))
+                            (lsp-session-folders-blacklist (lsp-session))))
            (lsp--find-root-interactively (lsp-session)))))
 
   (defadvice! +lsp-init-a (&optional arg)
@@ -106,8 +108,7 @@ Also logs the resolved project root, if found."
     (defun +lsp-init-ui-flycheck-or-flymake-h ()
       "Sets up flymake-mode or flycheck-mode, depending on `lsp-prefer-flymake'."
       (cond ((eq :none lsp-prefer-flymake))
-            ((and (not (version< emacs-version "26.1"))
-                  lsp-prefer-flymake)
+            (lsp-prefer-flymake
              (lsp--flymake-setup))
             ((require 'flycheck nil t)
              (require 'lsp-ui-flycheck)

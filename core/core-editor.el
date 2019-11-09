@@ -70,9 +70,9 @@ possible."
              (progn (make-directory parent-directory 'parents)
                     t))))))
 
-;; Don't autosave files or create lock/history/backup files. The
-;; editor doesn't need to hold our hands so much. We'll rely on git
-;; and our own good fortune instead. Fingers crossed!
+;; Don't autosave files or create lock/history/backup files. We don't want
+;; copies of potentially sensitive material floating around, and we'll rely on
+;; git and our own good fortune instead. Fingers crossed!
 (setq auto-save-default nil
       create-lockfiles nil
       make-backup-files nil
@@ -470,7 +470,8 @@ files, so we replace calls to `pp' with the much faster `prin1'."
 (use-package! so-long
   :after-call after-find-file
   :config
-  (global-so-long-mode +1)
+  (when doom-interactive-mode
+    (global-so-long-mode +1))
   ;; Don't disable syntax highlighting and line numbers, or make the buffer
   ;; read-only, in `so-long-minor-mode', so we can have a basic editing
   ;; experience in them, at least. It will remain off in `so-long-mode',

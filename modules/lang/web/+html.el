@@ -1,7 +1,7 @@
 ;;; lang/web/+html.el -*- lexical-binding: t; -*-
 
 (use-package! web-mode
-  :mode "\\.\\(?:as\\(?:[cp]x\\)\\|blade\\.php\\|erb\\|hbs\\|j\\(?:inja\\|sp\\)\\|mustache\\|phtml?\\|svelte\\|t\\(?:pl\\.php\\|sx\\|wig\\)\\|vue\\)\\'"
+  :mode "\\.\\(?:as\\(?:[cp]x\\)\\|blade\\.php\\|erb\\|hbs\\|j\\(?:inja\\|sp\\)\\|mustache\\|p?html?\\|svelte\\|t\\(?:pl\\.php\\|sx\\|wig\\)\\|vue\\)\\'"
   :mode "wp-content/themes/.+/.+\\.php\\'"
   :mode "templates/.+\\.php\\'"
   :config
@@ -41,12 +41,7 @@
       (setcdr alist
               (cl-loop for pair in (cdr alist)
                        unless (string-match-p "^[a-z-]" (cdr pair))
-                       collect (cons (car pair)
-                                     ;; TODO Replace with `string-trim-right' (Emacs 26+)
-                                     (let ((string (cdr pair)))
-                                       (if (string-match "\\(?:>\\|]\\|}\\)+\\'" string)
-                                           (replace-match "" t t string)
-                                         string))))))
+                       collect (cons (car pair) (string-trim-right (cdr pair))))))
     (delq! nil web-mode-engines-auto-pairs))
 
   (map! :map web-mode-map

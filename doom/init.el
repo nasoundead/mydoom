@@ -40,7 +40,6 @@
         multiple-cursors  ; editing in many places at once
         rotate-text       ; cycle region at point between text candidates
         fold
-        objed
         word-wrap
 
        :emacs

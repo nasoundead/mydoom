@@ -207,7 +207,19 @@ background (and foreground) match the current theme."
 
   ;; Fix 'require(...).print is not a function' error from `ob-js' when
   ;; executing JS src blocks
-  (setq org-babel-js-function-wrapper "console.log(require('util').inspect(function(){\n%s\n}()));"))
+  (setq org-babel-js-function-wrapper "console.log(require('util').inspect(function(){\n%s\n}()));")
+
+  ;; Fix #2010: ob-async needs to initialize Doom Emacs at least minimally for
+  ;; its async babel sessions to run correctly. This cannot be a named function
+  ;; because it is interpolated directly into a closure to be evaluated on the
+  ;; async session.
+  (defadvice! +org-init-doom-during-async-executation-a (orig-fn &rest args)
+    :around #'ob-async-org-babel-execute-src-block
+    (let ((ob-async-pre-execute-src-block-hook
+           ;; Ensure our hook is always first
+           (cons `(lambda () (load ,(concat doom-emacs-dir "init.el")))
+                 ob-async-pre-execute-src-block-hook)))
+      (apply orig-fn args))))
 
 
 (defun +org-init-babel-lazy-loader-h ()
@@ -644,10 +656,10 @@ between the two."
           "O" #'+org/refile-to-other-buffers
           "r" #'org-refile) ; to all `org-refile-targets'
         (:prefix ("a" . "attachments")
-          "a" #'org-attach/file
-          "u" #'org-attach/uri
-          "f" #'org-attach/find-file
-          "s" #'org-attach/sync)
+          "a" #'+org-attach/file
+          "u" #'+org-attach/uri
+          "f" #'+org-attach/find-file
+          "s" #'+org-attach/sync)
         (:prefix ("c" . "clock")
           "c" #'org-clock-in
           "C" #'org-clock-out
