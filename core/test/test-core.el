@@ -76,9 +76,7 @@
     :var (doom-autoload-file doom-alt-autoload-file result)
     (before-each
       (setq doom-autoload-file (make-temp-file "doom-autoload" nil ".el"))
-      (with-temp-file doom-autoload-file
-        (insert "(eval-when-compile (defvar x 1))")
-        (insert "(defvar x 2)"))
+      (with-temp-file doom-autoload-file)
       (byte-compile-file doom-autoload-file))
     (after-each
       (delete-file doom-autoload-file)
@@ -86,12 +84,12 @@
 
     (it "loads the byte-compiled autoloads file if available"
       (doom-load-autoloads-file doom-autoload-file)
-      (expect (caar load-history) :to-equal
+      (expect (caar load-history) :to-equal-file
               (byte-compile-dest-file doom-autoload-file))
 
       (delete-file (byte-compile-dest-file doom-autoload-file))
       (doom-load-autoloads-file doom-autoload-file)
-      (expect (caar load-history) :to-equal doom-autoload-file))
+      (expect (caar load-history) :to-equal-file doom-autoload-file))
 
     (it "returns non-nil if successful"
       (expect (doom-load-autoloads-file doom-autoload-file)))

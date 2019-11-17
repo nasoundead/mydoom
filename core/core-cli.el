@@ -2,10 +2,10 @@
 
 (require 'seq)
 
-;; Eagerly load these libraries because we may be in a session that
-;; hasn't been fully initialized (e.g. where autoloads files haven't
-;; been generated or `load-path' populated).
-(mapc (doom-rpartial #'load 'noerror 'nomessage)
+;; Eagerly load these libraries because we may be in a session that hasn't been
+;; fully initialized (e.g. where autoloads files haven't been generated or
+;; `load-path' populated).
+(mapc (doom-rpartial #'load nil (not doom-debug-mode) 'nosuffix)
       (file-expand-wildcards (concat doom-core-dir "autoload/*.el")))
 
 
@@ -22,14 +22,28 @@ commands like `doom-cli-packages-install', `doom-cli-packages-update' and
 (defvar doom--cli-groups (make-hash-table :test 'equal))
 (defvar doom--cli-group nil)
 
-;; TODO Constructors for optlist, arglist and fn
-(cl-defstruct doom-cli
-  (name)
+(cl-defstruct
+    (doom-cli
+     (:constructor nil)
+     (:constructor
+      make-doom-cli
+      (name &key desc aliases optlist arglist plist fn
+            &aux
+            (optlist
+             (cl-loop for (symbol options desc) in optlist
+                      for ((_ . options) (_ . params))
+                      = (seq-group-by #'stringp options)
+                      collect
+                      (make-doom-cli-option :symbol symbol
+                                            :flags options
+                                            :args params
+                                            :desc desc))))))
+  (name nil :read-only t)
   (desc "TODO")
-  (aliases ())
-  (optlist ())
-  (arglist ())
-  (plist ())
+  aliases
+  optlist
+  arglist
+  plist
   (fn (lambda (_) (print! "But nobody came!"))))
 
 (cl-defstruct doom-cli-option
@@ -165,19 +179,11 @@ BODY will be run when this dispatcher is called."
          (setq plist (plist-put plist :group doom--cli-group)))
        (puthash
         name
-        (make-doom-cli :name (symbol-name name)
+        (make-doom-cli (symbol-name name)
                        :desc ,docstring
                        :aliases (mapcar #'symbol-name aliases)
                        :arglist ',arglist
-                       :optlist
-                       (cl-loop for (symbol options desc) in ',optlist
-                                for ((_ . options) (_ . params))
-                                = (seq-group-by #'stringp options)
-                                collect
-                                (make-doom-cli-option :symbol symbol
-                                                      :flags options
-                                                      :args params
-                                                      :desc desc))
+                       :optlist ',optlist
                        :plist plist
                        :fn
                        (lambda (--alist--)

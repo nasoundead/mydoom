@@ -79,13 +79,12 @@ in."
   (print! (start "Checking Doom Emacs..."))
   (condition-case-unless-debug ex
       (print-group!
-       ;; Make sure Doom is initialized and loaded
-       (let ((doom-interactive-mode t))
-         (doom-initialize 'force))
-       (doom-initialize-core)
-       (print! (success "Initialized Doom Emacs %s") doom-version)
+       (let ((doom-interactive-mode 'doctor))
+         (doom-initialize 'force)
+         (doom-initialize-core)
+         (doom-initialize-modules))
 
-       (doom-initialize-modules)
+       (print! (success "Initialized Doom Emacs %s") doom-version)
        (print!
         (if (hash-table-p doom-modules)
             (success "Detected %d modules" (hash-table-count doom-modules))
@@ -97,14 +96,11 @@ in."
        (print-group!
         ;; Check for oversized problem files in cache that may cause unusual/tremendous
         ;; delays or freezing. This shouldn't happen often.
-        (dolist (file (list "savehist"
-                            "projectile.cache"))
-          (let* ((path (expand-file-name file doom-cache-dir))
-                 (size (/ (doom-file-size path) 1024)))
-            (when (and (numberp size) (> size 1000))
+        (dolist (file (list "savehist" "projectile.cache"))
+          (when-let (size (ignore-errors (doom-file-size file doom-cache-dir)))
+            (when (> size 1048576) ; larger than 1mb
               (warn! "%s is too large (%.02fmb). This may cause freezes or odd startup delays"
-                     (relpath path)
-                     (/ size 1024))
+                     file (/ size 1024))
               (explain! "Consider deleting it from your system (manually)"))))
 
         (unless (ignore-errors (executable-find doom-projectile-fd-binary))
@@ -112,12 +108,11 @@ in."
           (unless (executable-find "rg")
             (warn! "Couldn't find the `rg' binary either; project file searches will be even slower")))
 
-        (let ((default-directory "~"))
-          (require 'projectile)
-          (when (cl-find-if #'projectile-file-exists-p projectile-project-root-files-bottom-up)
-            (warn! "Your $HOME is recognized as a project root")
-            (explain! "Doom will disable bottom-up root search, which may reduce the accuracy of project\n"
-                      "detection.")))
+        (require 'projectile)
+        (when (projectile-project-root "~")
+          (warn! "Your $HOME is recognized as a project root")
+          (explain! "Doom will disable bottom-up root search, which may reduce the accuracy of project\n"
+                    "detection."))
 
         ;; There should only be one
         (when (and (file-equal-p doom-private-dir "~/.config/doom")
@@ -140,16 +135,15 @@ in."
                                            "/fonts/"))
                        (`darwin "~/Library/Fonts/"))
                      (require 'all-the-icons nil t))
-            (dolist (font all-the-icons-font-families)
-              (if (with-temp-buffer
-                    (insert (cdr (doom-call-process "fc-list")))
-                    (re-search-backward "Fira" nil t))
-                  (success! "Found font %s" font)
-                (print! (warn "Warning: couldn't find %s font in %s")
-                        font font-dest)
-                (explain! "You can install it by running `M-x all-the-icons-install-fonts' within Emacs.\n\n"
-                          "This could also mean you've installed them in non-standard locations, in which "
-                          "case feel free to ignore this warning."))))))
+            (with-temp-buffer
+              (insert (cdr (doom-call-process "fc-list")))
+              (dolist (font all-the-icons-font-names)
+                (if (save-excursion (re-search-backward font nil t))
+                    (success! "Found font %s" font)
+                  (print! (warn "Warning: couldn't find %S font") font)
+                  (explain! "You can install it by running `M-x all-the-icons-install-fonts' within Emacs.\n\n"
+                            "This could also mean you've installed them in non-standard locations, in which "
+                            "case feel free to ignore this warning.")))))))
 
        (print! (start "Checking for stale elc files in your DOOMDIR..."))
        (when (file-directory-p doom-private-dir)

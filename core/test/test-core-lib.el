@@ -69,13 +69,15 @@
   (describe "file!"
     (it "returns the executing file"
       (expect (eval-and-compile (file!))
-              :to-equal (expand-file-name "test/test-core-lib.el"
-                                          doom-core-dir))))
+              :to-equal
+              (eval-and-compile load-file-name))))
 
   (describe "dir!"
     (it "returns the executing directory"
       (expect (eval-and-compile (dir!))
-              :to-equal (expand-file-name "test" doom-core-dir))))
+              :to-equal
+              (eval-and-compile
+                (directory-file-name (file-name-directory load-file-name))))))
 
   (describe "pushnew!"
     (it "pushes values onto a list symbol, in order"
@@ -243,6 +245,10 @@
               (expand-file-name "path" doom-etc-dir) nil 'nomessage)))
 
   (describe "quiet!"
+    :var (doom-debug-mode)
+    (before-each
+      (setq doom-debug-mode nil))
+
     (it "suppresses output from message"
       (expect (message "hello world") :to-output "hello world\n")
       (expect (message "hello world") :to-output)
