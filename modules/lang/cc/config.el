@@ -114,7 +114,8 @@ This is ignored by ccls.")
              (inclass +cc-c++-lineup-inclass +)
              (label . 0))))
 
-  (setf (alist-get 'other c-default-style) "doom"))
+  (when (listp c-default-style)
+    (setf (alist-get 'other c-default-style) "doom")))
 
 
 (use-package! modern-cpp-font-lock
@@ -159,6 +160,10 @@ This is ignored by ccls.")
 
 ;;
 ;; Major modes
+
+(use-package! cmake-mode
+  :defer t
+  :config (set-docsets! 'cmake-mode "CMake"))
 
 (use-package! company-cmake  ; for `cmake-mode'
   :when (featurep! :completion company)

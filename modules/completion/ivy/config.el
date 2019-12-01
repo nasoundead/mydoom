@@ -59,6 +59,11 @@ results buffer.")
     [remap persp-switch-to-buffer]        #'+ivy/switch-workspace-buffer
     [remap evil-show-jumps]               #'+ivy/jump-list)
   :config
+  ;; Counsel changes a lot of ivy's state at startup; to control for that, we
+  ;; need to load it as early as possible. Some packages (like `ivy-prescient')
+  ;; require this.
+  (require 'counsel nil t)
+
   (setq ivy-height 17
         ivy-wrap t
         ivy-fixed-height-minibuffer t
@@ -172,7 +177,7 @@ evil-ex-specific constructs, so we disable it solely in evil-ex."
 
 
 (use-package! counsel
-  :commands counsel-describe-face
+  :defer t
   :init
   (define-key!
     [remap apropos]                  #'counsel-apropos
@@ -192,6 +197,7 @@ evil-ex-specific constructs, so we disable it solely in evil-ex."
     [remap evil-ex-registers]        #'counsel-evil-registers
     [remap evil-show-marks]          #'counsel-mark-ring
     [remap yank-pop]                 #'counsel-yank-pop
+    [remap load-theme]               #'counsel-load-theme
     [remap locate]                   #'counsel-locate
     [remap unicode-chars-list-chars] #'counsel-unicode-char
     [remap compile]                    #'+ivy/compile
@@ -328,7 +334,7 @@ evil-ex-specific constructs, so we disable it solely in evil-ex."
         #'+ivy-display-at-frame-center-near-bottom-fn)
 
   ;; posframe doesn't work well with async sources
-  (dolist (fn '(swiper counsel-ag counsel-grep counsel-git-grep))
+  (dolist (fn '(swiper counsel-rg counsel-grep counsel-git-grep))
     (setf (alist-get fn ivy-posframe-display-functions-alist)
           #'ivy-display-function-fallback)))
 

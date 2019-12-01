@@ -187,6 +187,7 @@ BODY will be run when this dispatcher is called."
                        :plist plist
                        :fn
                        (lambda (--alist--)
+                         (ignore --alist--)
                          (let ,(cl-loop for opt in speclist
                                         for optsym = (if (listp opt) (car opt) opt)
                                         unless (memq optsym cl--lambda-list-keywords)
@@ -216,7 +217,8 @@ BODY will be run when this dispatcher is called."
 (load! "cli/install")
 
 (defcli! (refresh re)
-    ((force-p ["-f" "--force"] "Regenerate autoloads files, whether or not they're stale"))
+    ((if-necessary-p ["-n" "--if-necessary"] "Only regenerate autoloads files if necessary")
+     (purge-p ["-p" "--purge"] "Also purge orphaned repos and ELPA packages"))
   "Ensure Doom is properly set up.
 
 This is the equivalent of running autoremove, install, autoloads, then
@@ -234,16 +236,16 @@ stale."
   (let (success)
     (when (file-exists-p doom-env-file)
       (doom-cli-reload-env-file 'force))
-    (doom-cli-reload-core-autoloads force-p)
+    (doom-cli-reload-core-autoloads (not if-necessary-p))
     (unwind-protect
         (progn
           (and (doom-cli-packages-install)
                (setq success t))
           (and (doom-cli-packages-build)
                (setq success t))
-          (and (doom-cli-packages-purge nil 'builds-p nil)
+          (and (doom-cli-packages-purge purge-p 'builds-p purge-p)
                (setq success t)))
-      (doom-cli-reload-package-autoloads (or success force-p))
+      (doom-cli-reload-package-autoloads (or success (not if-necessary-p)))
       (doom-cli-byte-compile nil 'recompile))
     t))
 

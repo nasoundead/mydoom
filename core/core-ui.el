@@ -345,11 +345,6 @@ treat Emacs as a non-application window."
       ;; But don't let the minibuffer grow beyond this size
       max-mini-window-height 0.15)
 
-;; Disable help mouse-overs for mode-line segments (i.e. :help-echo text).
-;; They're generally unhelpful and only add confusing visual clutter.
-(setq mode-line-default-help-echo nil
-      show-help-function nil)
-
 ;; Typing yes/no is obnoxious when y/n will do
 (fset #'yes-or-no-p #'y-or-n-p)
 
@@ -366,9 +361,7 @@ treat Emacs as a non-application window."
 (setq ansi-color-for-comint-mode t)
 
 
-(use-package! compile
-  :defer t
-  :config
+(after! compile
   (setq compilation-always-kill t       ; kill compilation process before starting another
         compilation-ask-about-save nil  ; save all buffers on `compile'
         compilation-scroll-output 'first-error)
@@ -376,9 +369,7 @@ treat Emacs as a non-application window."
   (add-hook 'compilation-filter-hook #'doom-apply-ansi-color-to-compilation-buffer-h))
 
 
-(use-package! ediff
-  :defer t
-  :config
+(after! ediff
   (setq ediff-diff-options "-w" ; turn off whitespace checking
         ediff-split-window-function #'split-window-horizontally
         ediff-window-setup-function #'ediff-setup-windows-plain)
@@ -535,7 +526,8 @@ behavior). Do not set this directly, this is let-bound in `doom-init-theme-h'.")
           default-frame-alist
           :key #'car :test #'eq))
         ((display-graphic-p)
-         (setq doom-font (face-attribute 'default :font)))))
+         (setq font-use-system-font t
+               doom-font (face-attribute 'default :font)))))
 
 (defun doom-init-extra-fonts-h (&optional frame)
   "Loads `doom-variable-pitch-font',`doom-serif-font' and `doom-unicode-font'."
@@ -619,6 +611,12 @@ startup (or theme switch) time, so long as `doom--prefer-theme-elc' is non-nil."
 
 ;;
 ;;; Fixes/hacks
+
+;; Doom doesn't support `customize' and it never will. It's a clumsy interface
+;; for something that should be configured from only one place ($DOOMDIR), so we
+;; disable them.
+(put 'customize 'disabled "Doom doesn't support `customize', configure Emacs from $DOOMDIR/config.el instead")
+(put 'customize-themes 'disabled "Set `doom-theme' or use `load-theme' in $DOOMDIR/config.el instead")
 
 ;; doesn't exist in terminal Emacs; we define it to prevent errors
 (unless (fboundp 'define-fringe-bitmap)

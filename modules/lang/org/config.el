@@ -140,9 +140,10 @@ background (and foreground) match the current theme."
   ;; HACK Face specs fed directly to `org-todo-keyword-faces' don't respect
   ;;      underlying faces like the `org-todo' face does, so we define our own
   ;;      intermediary faces that extend from org-todo.
-  (custom-declare-face '+org-todo-active '((t (:inherit (bold font-lock-constant-face org-todo)))) "")
-  (custom-declare-face '+org-todo-project '((t (:inherit (bold font-lock-doc-face org-todo)))) "")
-  (custom-declare-face '+org-todo-onhold '((t (:inherit (bold warning org-todo)))) "")
+  (with-no-warnings
+    (custom-declare-face '+org-todo-active '((t (:inherit (bold font-lock-constant-face org-todo)))) "")
+    (custom-declare-face '+org-todo-project '((t (:inherit (bold font-lock-doc-face org-todo)))) "")
+    (custom-declare-face '+org-todo-onhold '((t (:inherit (bold warning org-todo)))) ""))
   (setq org-todo-keywords
         '((sequence
            "TODO(t)"  ; A task that needs doing & is ready to do
@@ -207,19 +208,7 @@ background (and foreground) match the current theme."
 
   ;; Fix 'require(...).print is not a function' error from `ob-js' when
   ;; executing JS src blocks
-  (setq org-babel-js-function-wrapper "console.log(require('util').inspect(function(){\n%s\n}()));")
-
-  ;; Fix #2010: ob-async needs to initialize Doom Emacs at least minimally for
-  ;; its async babel sessions to run correctly. This cannot be a named function
-  ;; because it is interpolated directly into a closure to be evaluated on the
-  ;; async session.
-  (defadvice! +org-init-doom-during-async-executation-a (orig-fn &rest args)
-    :around #'ob-async-org-babel-execute-src-block
-    (let ((ob-async-pre-execute-src-block-hook
-           ;; Ensure our hook is always first
-           (cons `(lambda () (load ,(concat doom-emacs-dir "init.el")))
-                 ob-async-pre-execute-src-block-hook)))
-      (apply orig-fn args))))
+  (setq org-babel-js-function-wrapper "console.log(require('util').inspect(function(){\n%s\n}()));"))
 
 
 (defun +org-init-babel-lazy-loader-h ()
@@ -538,7 +527,7 @@ eldoc string."
           (separator (or separator "/")))
       (string-join
        (cl-loop for part
-                in (cdr (split-string (substring-no-properties result) separator))
+                in (split-string (substring-no-properties result) separator)
                 for n from 0
                 for face = (nth (% n org-n-level-faces) org-level-faces)
                 collect
@@ -640,8 +629,6 @@ between the two."
         "h" #'org-toggle-heading
         "i" #'org-toggle-item
         "I" #'org-toggle-inline-images
-        "l" #'org-insert-link
-        "L" #'+org/remove-link
         "n" #'org-store-link
         "o" #'org-set-property
         "p" #'org-priority
@@ -685,6 +672,14 @@ between the two."
           "i" #'org-id-goto
           "r" #'org-refile-goto-last-stored
           "x" #'org-capture-goto-last-stored)
+        (:prefix ("l" . "links")
+          "c" 'org-cliplink
+          "l" #'org-insert-link
+          "L" #'org-insert-all-links
+          "s" #'org-store-link
+          "S" #'org-insert-last-stored-link
+          "i" #'org-id-store-link
+          "d" #'+org/remove-link)
         (:prefix ("r" . "refile")
           "." #'+org/refile-to-current-file
           "c" #'+org/refile-to-running-clock
@@ -986,6 +981,7 @@ compelling reason, so..."
   ;;; Custom org modules
   (if (featurep! +dragndrop) (load! "contrib/dragndrop"))
   (if (featurep! +ipython)   (load! "contrib/ipython"))
+  (if (featurep! +journal)   (load! "contrib/journal"))
   (if (featurep! +pomodoro)  (load! "contrib/pomodoro"))
   (if (featurep! +present)   (load! "contrib/present"))
 

@@ -38,8 +38,7 @@ Emacs.")
         projectile-ignored-projects '("~/" "/tmp")
         projectile-kill-buffers-filter 'kill-only-files
         projectile-files-cache-expire 604800 ; expire after a week
-        projectile-sort-order 'recentf
-        projectile-use-git-grep t) ; use git-grep for text searches
+        projectile-sort-order 'recentf)
 
   (global-set-key [remap evil-jump-to-tag] #'projectile-find-tag)
   (global-set-key [remap find-tag]         #'projectile-find-tag)
@@ -67,14 +66,13 @@ Emacs.")
         projectile-project-root-files '("TAGS")
         projectile-project-root-files-top-down-recurring '(".svn" "Makefile"))
 
-  ;; a more generic project root file
   (push (abbreviate-file-name doom-local-dir) projectile-globally-ignored-directories)
 
   ;; Disable commands that won't work, as is, and that Doom already provides a
   ;; better alternative for.
-  (put 'projectile-ag 'disabled "Use +{ivy,helm}/project-search or +{ivy,helm}/ag instead")
-  (put 'projectile-ripgrep 'disabled "Use +{ivy,helm}/project-search or +{ivy,helm}/rg instead")
-  (put 'projectile-grep 'disabled "Use +{ivy,helm}/project-search or +{ivy,helm}/grep instead")
+  (put 'projectile-ag 'disabled "Use +{ivy,helm}/project-search instead")
+  (put 'projectile-ripgrep 'disabled "Use +{ivy,helm}/project-search instead")
+  (put 'projectile-grep 'disabled "Use +{ivy,helm}/project-search instead")
 
   ;; Treat current directory in dired as a "file in a project" and track it
   (add-hook 'dired-before-readin-hook #'projectile-track-known-projects-find-file-hook)
