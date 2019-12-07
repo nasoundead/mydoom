@@ -1,7 +1,8 @@
 ;;; ui/doom/config.el -*- lexical-binding: t; -*-
 
 (defvar +doom-solaire-themes
-  '((doom-city-lights . t)
+  '((doom-challenger-deep . t)
+    (doom-city-lights . t)
     (doom-dracula . t)
     (doom-molokai)
     (doom-nord . t)
@@ -10,11 +11,13 @@
     (doom-one . t)
     (doom-one-light . t)
     (doom-opera . t)
+    (doom-snazzy . t)
     (doom-solarized-dark . t)
     (doom-solarized-light)
-    (doom-spacegrey)
-    (doom-vibrant)
-    (doom-tomorrow-night))
+    (doom-spacegrey . t)
+    (doom-tomorrow-day . t)
+    (doom-tomorrow-night . t)
+    (doom-vibrant))
   "An alist of themes that support `solaire-mode'. If CDR is t, then
 `solaire-mode-swap-bg' will be used automatically, when the theme is loaded.")
 
@@ -22,7 +25,6 @@
 ;;
 ;;; Packages
 
-;; <https://github.com/hlissner/emacs-doom-theme>
 (use-package! doom-themes
   :defer t
   :init

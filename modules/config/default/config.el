@@ -301,9 +301,18 @@
   "rf"   #'doom/reload-font
   "re"   #'doom/reload-env
 
+  ;; make `describe-bindings' available under the b prefix which it previously
+  ;; occupied. Add more binding related commands under that prefix as well
+  "b"    nil
+  "bb"   #'describe-bindings
+  "bi"   #'which-key-show-minor-mode-keymap
+  "bm"   #'which-key-show-major-mode
+  "bt"   #'which-key-show-top-level
+  "bf"   #'which-key-show-full-keymap
+  "bk"   #'which-key-show-keymap
+
   ;; replaces `apropos-documentation' b/c `apropos' covers this
   "d"    nil
-  "d/"   #'doom/help-search
   "da"   #'doom/help-autodefs
   "db"   #'doom/report-bug
   "dd"   #'doom/toggle-debug-mode
@@ -319,14 +328,14 @@
   "dP"   #'doom/help-package-homepage
   "dc"   #'doom/goto-config-file
   "dC"   #'doom/help-package-config
-  "ds"   #'doom/sandbox
+  "ds"   #'doom/help-search
+  "dx"   #'doom/sandbox
   "dt"   #'doom/toggle-profiler
   "dv"   #'doom/version
 
   ;; replaces `apropos-command'
   "a"    #'apropos
   "A"    #'apropos-documentation
-  "/"    #'apropos-documentation
   ;; replaces `describe-copying' b/c not useful
   "C-c"  #'describe-coding-system
   ;; replaces `Info-got-emacs-command-node' b/c redundant w/ `Info-goto-node'
@@ -337,7 +346,7 @@
   "n"    #'doom/help-news
   ;; replaces `help-with-tutorial', b/c it's less useful than `load-theme'
   "t"    #'load-theme
-  ;; replaces `finder-by-keyword' b/c not usefull
+  ;; replaces `finder-by-keyword' b/c not useful
   "p"    #'doom/help-packages
   ;; replaces `describe-package' b/c redundant w/ `doom/describe-package'
   "P"    #'find-library)
@@ -349,6 +358,9 @@
                 which-key-replacement-alist)
     (cl-pushnew `((,(format "\\`\\(?:<\\(?:\\(?:f1\\|help\\)>\\)\\|C-h\\|%s h\\) r\\'" prefix-re))
                   nil . "reload")
+                which-key-replacement-alist)
+    (cl-pushnew `((,(format "\\`\\(?:<\\(?:\\(?:f1\\|help\\)>\\)\\|C-h\\|%s h\\) b\\'" prefix-re))
+                  nil . "bindings")
                 which-key-replacement-alist)))
 
 
