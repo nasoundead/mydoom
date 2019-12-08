@@ -62,7 +62,8 @@
   (push '("[ ]" . "☐") prettify-symbols-alist)
   (push '("[X]" . "☑" ) prettify-symbols-alist)
   (push '("[-]" . "❍" ) prettify-symbols-alist)
-  (prettify-symbols-mode)))
+  (prettify-symbols-mode)
+  (org-bullets-mode)))
 
 (defface org-checkbox-done-text
   '((t (:foreground "#71696A" :strike-through t)))
