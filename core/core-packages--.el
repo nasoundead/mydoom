@@ -80,9 +80,9 @@ missing) and shouldn't be deleted.")
       ;; than pulled, so packages are often out of date with upstream.
       package-archives
       (let ((proto (if gnutls-verify-error "https" "http")))
-        `(("gnu"   . ,(concat proto "://elpa.gnu.org/packages/"))
-          ("melpa" . ,(concat proto "://melpa.org/packages/"))
-          ("org"   . ,(concat proto "://orgmode.org/elpa/")))))
+        `(("gnu"   . ,(concat proto "://elpa.emacs-china.org/gnu/"))
+          ("melpa" . ,(concat proto "://elpa.emacs-china.org/melpa/"))
+          ("org"   . ,(concat proto "://elpa.emacs-china.org/org/")))))
 
 ;; Don't save `package-selected-packages' to `custom-file'
 (defadvice! doom--package-inhibit-custom-file-a (&optional value)

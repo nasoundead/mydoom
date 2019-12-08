@@ -74,6 +74,8 @@
         +babel           ; running code in org
         +capture         ; org-capture in and outside of Emacs
         +export          ; Exporting org to whatever you want
+		+dragndrop
+		+ipython
         +present)        ; Emacs for presentations
        plantuml          ; diagrams for confusing people more
        (python +lsp +pyvenv)   ; beautiful is better than ugly
