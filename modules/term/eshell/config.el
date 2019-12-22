@@ -39,7 +39,7 @@ You should use `set-eshell-alias!' to change this.")
 (defvar eshell-directory-name (concat doom-etc-dir "eshell"))
 
 ;; These files are exceptions, because they may contain configuration
-(defvar eshell-aliases-file (concat +eshell-config-dir "alias"))
+(defvar eshell-aliases-file (concat +eshell-config-dir "aliases"))
 (defvar eshell-rc-script    (concat +eshell-config-dir "profile"))
 (defvar eshell-login-script (concat +eshell-config-dir "login"))
 
@@ -149,7 +149,7 @@ You should use `set-eshell-alias!' to change this.")
             [remap split-window-below]  #'+eshell/split-below
             [remap split-window-right]  #'+eshell/split-right
             [remap doom/backward-to-bol-or-indent] #'eshell-bol
-            [remap doom/backward-kill-to-bol-and-indent] #'eshell-kill-input
+            [remap evil-delete-back-to-indentation] #'eshell-kill-input
             [remap evil-window-split]   #'+eshell/split-below
             [remap evil-window-vsplit]  #'+eshell/split-right)))
   (add-hook! 'eshell-mode-hook

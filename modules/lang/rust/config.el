@@ -10,10 +10,6 @@
 (use-package! rustic
   :mode ("\\.rs$" . rustic-mode)
   :commands rustic-run-cargo-command rustic-cargo-outdated
-  :preface
-  ;; We use the superior default client provided by `lsp-mode', not the one
-  ;; rustic-mode sets up for us.
-  (setq rustic-lsp-client nil)
   :config
   (set-docsets! 'rustic-mode "Rust")
 
@@ -25,7 +21,10 @@
         ;;        buffers, so we disable it, but only for evil users, because it
         ;;        affects `forward-sexp' and its ilk. See
         ;;        https://github.com/rust-lang/rust-mode/issues/288.
-        rustic-match-angle-brackets (not (featurep! :editor evil)))
+        rustic-match-angle-brackets (not (featurep! :editor evil))
+        ;; We use the superior default client provided by `lsp-mode', not the
+        ;; one rustic-mode sets up for us.
+        rustic-lsp-client nil)
 
   (add-hook 'rustic-mode-hook #'rainbow-delimiters-mode)
 
@@ -47,7 +46,23 @@
           :desc "cargo run"      "r" #'rustic-cargo-run)
         (:prefix ("t" . "cargo test")
           :desc "all"          "a" #'rustic-cargo-test
-          :desc "current test" "t" #'rustic-cargo-current-test)))
+          :desc "current test" "t" #'rustic-cargo-current-test))
+
+  (defadvice! +rust--dont-install-packages-p (orig-fn &rest args)
+    :around #'rustic-setup-lsp
+    (cl-letf (;; `rustic-setup-lsp' uses `package-installed-p' to determine if
+              ;; lsp-mode/elgot are available. This breaks because Doom doesn't
+              ;; use package.el to begin with (and lazy loads it).
+              ((symbol-function #'package-installed-p)
+               (lambda (pkg)
+                 (require pkg nil t)))
+              ;; If lsp/elgot isn't available, it attempts to install lsp-mode
+              ;; via package.el. Doom manages its own dependencies so we disable
+              ;; that behavior.
+              ((symbol-function #'rustic-install-lsp-client-p)
+               (lambda (&rest _)
+                 (message "No RLS server running"))))
+      (apply orig-fn args))))
 
 
 (use-package! racer

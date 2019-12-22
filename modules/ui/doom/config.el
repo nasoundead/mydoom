@@ -5,6 +5,7 @@
     (doom-city-lights . t)
     (doom-dracula . t)
     (doom-molokai)
+    (doom-gruvbox . t)
     (doom-nord . t)
     (doom-nord-light . t)
     (doom-nova)
@@ -44,6 +45,7 @@
 
 
 (use-package! solaire-mode
+  :when (or (daemonp) (display-graphic-p))
   :defer t
   :init
   (add-hook! 'doom-load-theme-hook :append

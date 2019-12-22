@@ -26,7 +26,7 @@
     (set-eval-handler! '(clojure-mode clojurescript-mode) #'cider-eval-region))
   :config
   (add-hook 'cider-mode-hook #'eldoc-mode)
-  (set-lookup-handlers! 'cider-mode
+  (set-lookup-handlers! '(cider-mode cider-repl-mode)
     :definition #'+clojure-cider-lookup-definition
     :documentation #'cider-doc)
   (set-popup-rules!
@@ -94,9 +94,10 @@
             (:prefix ("h" . "help")
               "n" #'cider-find-ns
               "a" #'cider-apropos
+              "c" #'cider-clojuredocs
               "d" #'cider-doc
-              "g" #'cider-grimoire-web
-              "j" #'cider-javadoc)
+              "j" #'cider-javadoc
+              "w" #'cider-clojuredocs-web)
             (:prefix ("i" . "inspect")
               "e" #'cider-enlighten-mode
               "i" #'cider-inspect

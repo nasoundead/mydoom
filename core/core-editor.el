@@ -56,7 +56,8 @@ possible."
 
 ;; Resolve symlinks when opening files, so that any operations are conducted
 ;; from the file's true directory (like `find-file').
-(setq find-file-visit-truename t)
+(setq find-file-visit-truename t
+      vc-follow-symlinks t)
 
 ;; Disable the warning "X and Y are the same file". It's fine to ignore this
 ;; warning as it will redirect you to the existing buffer anyway.
@@ -145,6 +146,7 @@ possible."
 
 (push '("/LICENSE\\'" . text-mode) auto-mode-alist)
 (push '("\\.log\\'" . text-mode) auto-mode-alist)
+(push '("\\.env\\'" . sh-mode) auto-mode-alist)
 
 
 ;;
@@ -198,12 +200,7 @@ possible."
   (setq recentf-save-file (concat doom-cache-dir "recentf")
         recentf-auto-cleanup 'never
         recentf-max-menu-items 0
-        recentf-max-saved-items 200
-        recentf-exclude
-        (list "\\.\\(?:gz\\|gif\\|svg\\|png\\|jpe?g\\)$" "^/tmp/" "^/ssh:"
-              "\\.?ido\\.last$" "\\.revive$" "/TAGS$" "^/var/folders/.+$"
-              ;; ignore private DOOM temp files
-              (concat "^" (recentf-apply-filename-handlers doom-local-dir))))
+        recentf-max-saved-items 200)
 
   (add-hook! '(doom-switch-window-hook write-file-functions)
     (defun doom--recentf-touch-buffer-h ()
@@ -270,6 +267,7 @@ files, so we replace calls to `pp' with the much faster `prin1'."
 (use-package! server
   :when (display-graphic-p)
   :after-call pre-command-hook after-find-file focus-out-hook
+  :defer 1
   :init
   (when-let (name (getenv "EMACS_SERVER_NAME"))
     (setq server-name name))
@@ -422,7 +420,7 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   (require 'smartparens-config)
 
   ;; Overlays are too distracting and not terribly helpful. show-parens does
-  ;; this for us already, so...
+  ;; this for us already (and is faster), so...
   (setq sp-highlight-pair-overlay nil
         sp-highlight-wrap-overlay nil
         sp-highlight-wrap-tag-overlay nil)
@@ -446,7 +444,7 @@ files, so we replace calls to `pp' with the much faster `prin1'."
 
   ;; Silence some harmless but annoying echo-area spam
   (dolist (key '(:unmatched-expression :no-matching-tag))
-    (setf (cdr (assq key sp-message-alist)) nil))
+    (setf (alist-get key sp-message-alist) nil))
 
   (add-hook! 'minibuffer-setup-hook
     (defun doom-init-smartparens-in-minibuffer-maybe-h ()
@@ -490,6 +488,8 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   (delq! 'buffer-read-only so-long-variable-overrides 'assq)
   ;; ...but at least reduce the level of syntax highlighting
   (add-to-list 'so-long-variable-overrides '(font-lock-maximum-decoration . 1))
+  ;; Text files could possibly be too long too
+  (add-to-list 'so-long-target-modes 'text-mode)
   ;; But disable everything else that may be unnecessary/expensive for large
   ;; or wide buffers.
   (appendq! so-long-minor-modes
@@ -503,7 +503,14 @@ files, so we replace calls to `pp' with the much faster `prin1'."
               auto-composition-mode
               undo-tree-mode
               highlight-indent-guides-mode
-              hl-fill-column-mode)))
+              hl-fill-column-mode))
+  ;; HACK Fix #2183: `so-long-detected-long-line-p' tries to parse comment
+  ;;      syntax, but in some buffers comment state isn't initialized, leading
+  ;;      to a wrong-type-argument: stringp error.
+  (defun doom-buffer-has-long-lines-p ()
+    (when (bound-and-true-p comment-use-syntax)
+      (so-long-detected-long-line-p)))
+  (setq so-long-predicate #'doom-buffer-has-long-lines-p))
 
 
 (use-package! undo-tree

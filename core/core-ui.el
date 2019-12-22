@@ -216,19 +216,21 @@ read-only or not file-visiting."
 
 (setq confirm-nonexistent-file-or-buffer t)
 
-(defadvice! doom--switch-to-fallback-buffer-maybe-a (orig-fn)
+(defadvice! doom--switch-to-fallback-buffer-maybe-a (&rest _)
   "Switch to `doom-fallback-buffer' if on last real buffer.
 
 Advice for `kill-current-buffer'. If in a dedicated window, delete it. If there
 are no real buffers left OR if all remaining buffers are visible in other
 windows, switch to `doom-fallback-buffer'. Otherwise, delegate to original
 `kill-current-buffer'."
-  :around #'kill-current-buffer
+  :before-until #'kill-current-buffer
   (let ((buf (current-buffer)))
     (cond ((window-dedicated-p)
-           (delete-window))
+           (delete-window)
+           t)
           ((eq buf (doom-fallback-buffer))
-           (message "Can't kill the fallback buffer."))
+           (message "Can't kill the fallback buffer.")
+           t)
           ((doom-real-buffer-p buf)
            (if (and buffer-file-name
                     (buffer-modified-p buf)
@@ -247,8 +249,8 @@ windows, switch to `doom-fallback-buffer'. Otherwise, delegate to original
                  (switch-to-buffer (doom-fallback-buffer)))
                (unless (delq (selected-window) (get-buffer-window-list buf nil t))
                  (kill-buffer buf)))
-             (run-hooks 'buffer-list-update-hook)))
-          ((funcall orig-fn)))))
+             (run-hooks 'buffer-list-update-hook))
+           t))))
 
 
 ;;
@@ -318,7 +320,8 @@ treat Emacs as a non-application window."
 ;; always avoid GUI
 (setq use-dialog-box nil)
 ;; Don't display floating tooltips; display their contents in the echo-area.
-(if (bound-and-true-p tooltip-mode) (tooltip-mode -1))
+(when (bound-and-true-p tooltip-mode)
+  (tooltip-mode -1))
 ;; native linux tooltips are ugly
 (when IS-LINUX
   (setq x-gtk-use-system-tooltips nil))
@@ -401,19 +404,20 @@ treat Emacs as a non-application window."
   (setq hl-line-sticky-flag nil
         global-hl-line-sticky-flag nil)
 
-  ;; Disable `hl-line' in evil-visual mode (temporarily). `hl-line' can make the
-  ;; selection region harder to see while in evil visual mode.
-  (after! evil
-    (defvar doom-buffer-hl-line-mode nil)
-    (add-hook! 'evil-visual-state-entry-hook
-      (defun doom-disable-hl-line-h ()
-        (when hl-line-mode
-          (setq-local doom-buffer-hl-line-mode t)
-          (hl-line-mode -1))))
-    (add-hook! 'evil-visual-state-exit-hook
-      (defun doom-enable-hl-line-maybe-h ()
-        (when doom-buffer-hl-line-mode
-          (hl-line-mode +1))))))
+  ;; Temporarily disable `hl-line' when selection is active, since it doesn't
+  ;; serve much purpose when the selection is so much more visible.
+  (defvar doom-buffer-hl-line-mode nil)
+
+  (add-hook! '(evil-visual-state-entry-hook activate-mark-hook)
+    (defun doom-disable-hl-line-h ()
+      (when hl-line-mode
+        (setq-local doom-buffer-hl-line-mode t)
+        (hl-line-mode -1))))
+
+  (add-hook! '(evil-visual-state-exit-hook deactivate-mark-hook)
+    (defun doom-enable-hl-line-maybe-h ()
+      (when doom-buffer-hl-line-mode
+        (hl-line-mode +1)))))
 
 
 (use-package! winner
@@ -458,16 +462,7 @@ treat Emacs as a non-application window."
              all-the-icons-fileicon
              all-the-icons-wicon
              all-the-icons-material
-             all-the-icons-alltheicon)
-  :init
-  (defadvice! doom--disable-all-the-icons-in-tty-a (orig-fn &rest args)
-    "Return a blank string in tty Emacs, which doesn't support multiple fonts."
-    :around '(all-the-icons-octicon all-the-icons-material
-              all-the-icons-faicon all-the-icons-fileicon
-              all-the-icons-wicon all-the-icons-alltheicon)
-    (if (display-multi-font-p)
-        (apply orig-fn args)
-      "")))
+             all-the-icons-alltheicon))
 
 ;;;###package hide-mode-line-mode
 (add-hook! '(completion-list-mode-hook Man-mode-hook)
@@ -494,9 +489,13 @@ treat Emacs as a non-application window."
 ;;
 ;;; Line numbers
 
+;; Explicitly define a width to reduce computation
 (setq-default display-line-numbers-width 3)
 
-;; line numbers in most modes
+;; Show absolute line numbers for narrowed regions
+(setq-default display-line-numbers-widen t)
+
+;; Enable line numbers in most text-editing modes
 (add-hook! '(prog-mode-hook text-mode-hook conf-mode-hook)
            #'display-line-numbers-mode)
 
