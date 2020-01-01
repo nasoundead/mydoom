@@ -23,7 +23,9 @@
 ;;;###package avy
 (setq avy-all-windows nil
       avy-all-windows-alt t
-      avy-background t)
+      avy-background t
+      ;; the unpredictability of this makes it a poor default
+      avy-single-candidate-jump nil)
 
 
 (after! epa
@@ -63,7 +65,7 @@
   ;;   (sp-pair "{" nil :post-handlers '(:rem ("| " "SPC")))
   (after! smartparens
     ;; Smartparens is broken in `cc-mode' as of Emacs 27. See
-    ;; <https://github.com/Fuco1/smartparens/issues/963>.
+    ;; https://github.com/Fuco1/smartparens/issues/963.
     (unless EMACS27+
       (pushnew! sp--special-self-insert-commands 'c-electric-paren 'c-electric-brace))
 
@@ -262,7 +264,7 @@
         "s-/" (λ! (save-excursion (comment-line 1)))
         :n "s-/" #'evilnc-comment-or-uncomment-lines
         :v "s-/" #'evilnc-comment-operator
-        :gi  [s-backspace] #'evil-delete-back-to-indentation
+        :gi  [s-backspace] #'doom/backward-kill-to-bol-and-indent
         :gi  [s-left]      #'doom/backward-to-bol-or-indent
         :gi  [s-right]     #'doom/forward-to-last-non-comment-or-eol
         :gi  [M-backspace] #'backward-kill-word
@@ -278,6 +280,7 @@
 (define-key! help-map
   ;; new keybinds
   "'"    #'describe-char
+  "u"    #'doom/help-autodefs
   "E"    #'doom/sandbox
   "M"    #'doom/describe-active-minor-mode
   "O"    #'+lookup/online
@@ -313,25 +316,27 @@
 
   ;; replaces `apropos-documentation' b/c `apropos' covers this
   "d"    nil
-  "da"   #'doom/help-autodefs
   "db"   #'doom/report-bug
+  "dc"   #'doom/goto-private-config-file
+  "dC"   #'doom/goto-private-init-file
   "dd"   #'doom/toggle-debug-mode
   "df"   #'doom/help-faq
   "dh"   #'doom/help
-  "dk"   #'doom/goto-packages-file
   "dl"   #'doom/help-search-load-path
+  "dL"   #'doom/help-search-loaded-files
   "dm"   #'doom/help-modules
   "dn"   #'doom/help-news
   "dN"   #'doom/help-news-search
-  "di"   #'doom/goto-doomblock
-  "dp"   #'doom/help-packages
-  "dP"   #'doom/help-package-homepage
-  "dc"   #'doom/goto-config-file
-  "dC"   #'doom/help-package-config
-  "ds"   #'doom/help-search
-  "dx"   #'doom/sandbox
+  "dpc"  #'doom/help-package-config
+  "dpd"  #'doom/goto-private-packages-file
+  "dph"  #'doom/help-package-homepage
+  "dpp"  #'doom/help-packages
+  "ds"   #'doom/help-search-headings
+  "dS"   #'doom/help-search
   "dt"   #'doom/toggle-profiler
+  "du"   #'doom/help-autodefs
   "dv"   #'doom/version
+  "dx"   #'doom/sandbox
 
   ;; replaces `apropos-command'
   "a"    #'apropos

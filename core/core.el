@@ -273,6 +273,16 @@ users).")
           gcmh-verbose doom-debug-mode)
     (add-hook 'focus-out-hook #'gcmh-idle-garbage-collect)))
 
+;; HACK `tty-run-terminal-initialization' is *tremendously* slow for some
+;;      reason. Disabling it completely could have many side-effects, so we
+;;      defer it until later.
+(unless (display-graphic-p)
+  (advice-add #'tty-run-terminal-initialization :override #'ignore)
+  (add-hook! 'window-setup-hook
+    (defun doom-init-tty-h ()
+      (advice-remove #'tty-run-terminal-initialization #'ignore)
+      (tty-run-terminal-initialization (selected-frame) nil t))))
+
 
 ;;
 ;;; MODE-local-vars-hook
@@ -533,7 +543,11 @@ to least)."
           (warn "Your Doom core autoloads file is missing"))
         (unless pkg-autoloads-p
           (warn "Your package autoloads file is missing"))
-        (signal 'doom-autoload-error (list "Run `bin/doom refresh' to generate them"))))
+        (signal 'doom-autoload-error (list "Run `bin/doom refresh' to generate them")))
+
+      (when doom-interactive-mode
+        (add-hook 'window-setup-hook #'doom-display-benchmark-h 'append)
+        (add-to-list 'command-switch-alist (cons "--restore" #'doom-restore-session-handler))))
     t))
 
 (defun doom-initialize-core ()

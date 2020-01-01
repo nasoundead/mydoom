@@ -12,8 +12,8 @@ successfully sets indent_style/indent_size.")
 (defvar-local doom-large-file-p nil)
 (put 'doom-large-file-p 'permanent-local t)
 
-(defvar doom-large-file-size-alist '((t . 1.0))
-  "An alist mapping major mode to filesize thresholds.
+(defvar doom-large-file-size-alist '(("." . 1.0))
+  "An alist mapping regexps (like `auto-mode-alist') to filesize thresholds.
 
 If a file is opened and discovered to be larger than the threshold, Doom
 performs emergency optimizations to prevent Emacs from hanging, crashing or
@@ -42,15 +42,16 @@ possible."
   (if (setq doom-large-file-p
             (and buffer-file-name
                  (not doom-large-file-p)
-                 (file-readable-p buffer-file-name)
+                 (file-exists-p buffer-file-name)
                  (> (nth 7 (file-attributes buffer-file-name))
                     (* 1024 1024
-                       (cdr (or (assq major-mode doom-large-file-size-alist)
-                                (assq 't doom-large-file-size-alist)))))))
+                       (assoc-default buffer-file-name doom-large-file-size-alist
+                                      #'string-match-p)))))
       (prog1 (apply orig-fn args)
         (if (memq major-mode doom-large-file-excluded-modes)
             (setq doom-large-file-p nil)
-          (so-long-minor-mode +1)
+          (when (fboundp 'so-long-minor-mode) ; in case the user disabled it
+            (so-long-minor-mode +1))
           (message "Large file detected! Cutting a few corners to improve performance...")))
     (apply orig-fn args)))
 
@@ -195,9 +196,11 @@ possible."
             (not (file-remote-p file)))
         (file-truename file)
       file))
-  (setq recentf-filename-handlers '(doom--recent-file-truename abbreviate-file-name))
-
-  (setq recentf-save-file (concat doom-cache-dir "recentf")
+  (setq recentf-filename-handlers
+        '(substring-no-properties
+          doom--recent-file-truename
+          abbreviate-file-name)
+        recentf-save-file (concat doom-cache-dir "recentf")
         recentf-auto-cleanup 'never
         recentf-max-menu-items 0
         recentf-max-saved-items 200)
@@ -251,6 +254,11 @@ possible."
     "Recenter on cursor when loading a saved place."
     :after-while #'save-place-find-file-hook
     (if buffer-file-name (ignore-errors (recenter))))
+
+  (defadvice! doom--inhibit-saveplace-in-long-files-a (orig-fn &rest args)
+    :around #'save-place-to-alist
+    (unless doom-large-file-p
+      (apply orig-fn args)))
 
   (defadvice! doom--dont-prettify-saveplace-cache-a (orig-fn)
     "`save-place-alist-to-file' uses `pp' to prettify the contents of its cache.
@@ -379,12 +387,11 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   ;; a better *help* buffer
   :commands helpful--read-symbol
   :init
-  (define-key!
-    [remap describe-function] #'helpful-callable
-    [remap describe-command]  #'helpful-command
-    [remap describe-variable] #'helpful-variable
-    [remap describe-key]      #'helpful-key
-    [remap describe-symbol]   #'doom/describe-symbol)
+  (global-set-key [remap describe-function] #'helpful-callable)
+  (global-set-key [remap describe-command]  #'helpful-command)
+  (global-set-key [remap describe-variable] #'helpful-variable)
+  (global-set-key [remap describe-key]      #'helpful-key)
+  (global-set-key [remap describe-symbol]   #'doom/describe-symbol)
 
   (defun doom-use-helpful-a (orig-fn &rest args)
     "Force ORIG-FN to use helpful instead of the old describe-* commands."
@@ -488,6 +495,8 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   (delq! 'buffer-read-only so-long-variable-overrides 'assq)
   ;; ...but at least reduce the level of syntax highlighting
   (add-to-list 'so-long-variable-overrides '(font-lock-maximum-decoration . 1))
+  ;; ...and insist that save-place not operate in large/long files
+  (add-to-list 'so-long-variable-overrides '(save-place-alist . nil))
   ;; Text files could possibly be too long too
   (add-to-list 'so-long-target-modes 'text-mode)
   ;; But disable everything else that may be unnecessary/expensive for large
@@ -508,7 +517,7 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   ;;      syntax, but in some buffers comment state isn't initialized, leading
   ;;      to a wrong-type-argument: stringp error.
   (defun doom-buffer-has-long-lines-p ()
-    (when (bound-and-true-p comment-use-syntax)
+    (let ((so-long-skip-leading-comments (bound-and-true-p comment-use-syntax)))
       (so-long-detected-long-line-p)))
   (setq so-long-predicate #'doom-buffer-has-long-lines-p))
 
@@ -557,7 +566,7 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   :config
   (appendq! ws-butler-global-exempt-modes
             '(special-mode comint-mode term-mode eshell-mode))
-  (ws-butler-global-mode))
+  (ws-butler-global-mode +1))
 
 (provide 'core-editor)
 ;;; core-editor.el ends here

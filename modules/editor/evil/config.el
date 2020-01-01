@@ -21,12 +21,13 @@ directives. By default, this only recognizes C directives.")
 ;; Set these defaults before `evil'; use `defvar' so they can be changed prior
 ;; to loading.
 (defvar evil-want-C-i-jump (or (daemonp) (display-graphic-p)))
-(defvar evil-want-C-u-scroll t)
+(defvar evil-want-C-u-scroll t)  ; moved the universal arg to <leader> u
 (defvar evil-want-C-u-delete t)
 (defvar evil-want-C-w-scroll t)
 (defvar evil-want-C-w-delete t)
 (defvar evil-want-Y-yank-to-eol t)
 (defvar evil-want-abbrev-expand-on-insert-exit nil)
+(defvar evil-respect-visual-line-mode t)
 
 (use-package! evil
   :hook (doom-init-modules . evil-mode)
@@ -41,7 +42,6 @@ directives. By default, this only recognizes C directives.")
         evil-ex-visual-char-range t  ; column range for ex commands
         evil-insert-skip-empty-lines t
         evil-mode-line-format 'nil
-        evil-respect-visual-line-mode t
         ;; more vim-like behavior
         evil-symbol-word-search t
         ;; cursor appearance
@@ -210,6 +210,7 @@ directives. By default, this only recognizes C directives.")
 (use-package! evil-easymotion
   :commands evilem-create evilem-default-keybindings
   :config
+  (evilem-default-keybindings "<easymotion>")
   ;; Use evil-search backend, instead of isearch
   (evilem-make-motion evilem-motion-search-next #'evil-ex-search-next
                       :bind ((evil-ex-search-highlight-all nil)))
@@ -557,14 +558,20 @@ To change these keys see `+evil-repeat-keys'."
       :textobj "x" #'evil-inner-xml-attr               #'evil-outer-xml-attr
 
       ;; evil-easymotion
-      (:prefix "<easymotion>" ; see `+evil/easymotion'
-        "a" (evilem-create #'evil-forward-arg)
-        "A" (evilem-create #'evil-backward-arg)
-        "s" #'evil-avy-goto-char-2
-        "SPC" (λ!! #'evil-avy-goto-char-timer t)
-        "/" #'evil-avy-goto-char-timer)
+      (:after evil-easymotion
+        (:prefix "<easymotion>" ; see `+evil/easymotion'
+          "a" (evilem-create #'evil-forward-arg)
+          "A" (evilem-create #'evil-backward-arg)
+          "s" #'evil-avy-goto-char-2
+          "w" (evilem-create #'evil-snipe-repeat
+                             :pre-hook (save-excursion (call-interactively #'evil-snipe-f))
+                             :bind ((evil-snipe-scope 'visible)
+                                    (evil-snipe-enable-highlight)
+                                    (evil-snipe-enable-incremental-highlight)))
+          "SPC" (λ!! #'evil-avy-goto-char-timer t)
+          "/" #'evil-avy-goto-char-timer))
 
-      ;; evil-snipe
+        ;; evil-snipe
       (:after evil-snipe
         :map evil-snipe-parent-transient-map
         "C-;" (λ! (require 'evil-easymotion)

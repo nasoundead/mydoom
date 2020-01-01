@@ -61,13 +61,13 @@
       :i "C-j"           #'+default/newline    ; default behavior
 
       (:after help :map help-mode-map
-        :n "o"       #'ace-link-help)
+        :n "o"       #'link-hint-open-link)
       (:after helpful :map helpful-mode-map
-        :n "o"       #'ace-link-help)
+        :n "o"       #'link-hint-open-link)
       (:after info :map Info-mode-map
-        :n "o"       #'ace-link-info)
+        :n "o"       #'link-hint-open-link)
       (:after apropos :map apropos-mode-map
-        :n "o"       #'ace-link-help
+        :n "o"       #'link-hint-open-link
         :n "TAB"     #'forward-button
         :n [tab]     #'forward-button
         :n [backtab] #'backward-button)
@@ -142,7 +142,7 @@
             "C-j"     #'company-select-next-or-abort
             "C-k"     #'company-select-previous-or-abort
             "C-s"     (λ! (company-search-abort) (company-filter-candidates))
-            "ESC"     #'company-search-abort))
+            [escape]  #'company-search-abort))
         ;; TAB auto-completion in term buffers
         (:after comint :map comint-mode-map
           "TAB" #'company-complete
@@ -340,6 +340,7 @@
         :desc "Revert buffer"               "r"   #'revert-buffer
         :desc "Save buffer"                 "s"   #'basic-save-buffer
         :desc "Save all buffers"            "S"   #'evil-write-all
+        :desc "Save buffer as root"         "u"   #'doom/sudo-save-buffer
         :desc "Pop up scratch buffer"       "x"   #'doom/open-scratch-buffer
         :desc "Switch to scratch buffer"    "X"   #'doom/switch-to-scratch-buffer
         :desc "Bury buffer"                 "z"   #'bury-buffer
@@ -582,7 +583,7 @@
         :desc "Search other directory"       "D" #'+default/search-other-cwd
         :desc "Locate file"                  "f" #'locate
         :desc "Jump to symbol"               "i" #'imenu
-        :desc "Jump to visible link"         "l" #'ace-link
+        :desc "Jump to visible link"         "l" #'link-hint-open-link
         :desc "Jump to link"                 "L" #'ffap-menu
         :desc "Jump list"                    "j" #'evil-show-jumps
         :desc "Jump to mark"                 "m" #'evil-show-marks

@@ -68,7 +68,7 @@ DOOMDIR environment variable. e.g.
       (if (file-exists-p doom-env-file)
           (print! (info "Envvar file already exists, skipping"))
         (when (or doom-auto-accept
-                  (y-or-n-p "Generate an env file? (see `doom help env` for details)"))
+                  (y-or-n-p "Generate an envvar file? (see `doom help env` for details)"))
           (doom-cli-reload-env-file 'force-p))))
 
     ;; Install Doom packages
@@ -78,7 +78,7 @@ DOOMDIR environment variable. e.g.
       (doom-cli-packages-install))
 
     (print! "Regenerating autoloads files")
-    (doom-cli-reload-autoloads nil 'force-p)
+    (doom-cli-reload-autoloads)
 
     (if nofonts-p
         (print! (warn "Not installing fonts, as requested"))

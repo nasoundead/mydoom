@@ -22,7 +22,7 @@ This marks a foldable marker for `outline-minor-mode' in elisp buffers.")
   (set-repl-handler! '(emacs-lisp-mode lisp-interaction-mode) #'+emacs-lisp/open-repl)
   (set-eval-handler! '(emacs-lisp-mode lisp-interaction-mode) #'+emacs-lisp-eval)
   (set-lookup-handlers! 'emacs-lisp-mode
-    :definition    #'elisp-def
+    :definition    #'+emacs-lisp-lookup-definition
     :documentation #'+emacs-lisp-lookup-documentation)
   (set-docsets! '(emacs-lisp-mode lisp-interaction-mode) "Emacs Lisp")
   (set-pretty-symbols! 'emacs-lisp-mode :lambda "lambda")
@@ -167,8 +167,8 @@ This marks a foldable marker for `outline-minor-mode' in elisp buffers.")
   (set-yas-minor-mode! 'buttercup-minor-mode)
   (when (featurep 'evil)
     (add-hook 'buttercup-minor-mode-hook #'evil-normalize-keymaps))
-  (map! :map buttercup-minor-mode-map
-        :localleader
+  (map! :localleader
+        :map buttercup-minor-mode-map
         :prefix "t"
         "t" #'+emacs-lisp/buttercup-run-file
         "a" #'+emacs-lisp/buttercup-run-project
