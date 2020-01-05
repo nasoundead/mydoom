@@ -30,23 +30,9 @@
    '(org-table ((t (:family "Ubuntu Mono"))))
    )
 
-;; (when (string-equal system-type "windows-nt")
-;;   (setq exec-path
-;;     '(
-;;     "C:/Program Files (x86)/Emacs/emacs/bin/"
-;;     "C:/Program Files (x86)/Emacs/EmacsW32/gnuwin32/bin/"
-;;     "C:/Windows/system32/"
-;;     "C:/Windows/"
-;;     "C:/Windows/System32/Wbem/"
-;;     "C:/Windows/system32/WindowsPowerShell/v1.0/"
-;; 	"C:/Program Files/Git/bin/git.exe"
-;; 	"D:/forwin/bin/"
-;;     ))
-;;   (setenv "PATH" (mapconcat #'identity exec-path path-separator))
-;;  )
 
-;; (setq doom-theme 'doom-nord)
-(setq doom-theme 'doom-one)
+(setq doom-theme 'doom-nord)
+;; (setq doom-theme 'doom-one)
 (setq doom-font (font-spec :family "Cascadia Code" :size 16)
       doom-variable-pitch-font (font-spec :family "Fira Sans")
       doom-unicode-font (font-spec :family "DejaVu Sans Mono")
@@ -63,6 +49,8 @@
   (push '("[X]" . "☑" ) prettify-symbols-alist)
   (push '("[-]" . "❍" ) prettify-symbols-alist)
   (prettify-symbols-mode)
+  (after! ob-java
+    (setq org-babel-java-compiler "javac -encoding utf-8"))
   (org-bullets-mode)))
 
 (defface org-checkbox-done-text
